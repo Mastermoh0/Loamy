@@ -497,6 +497,8 @@ def process_receipt_image(file_data, content_type, user_id="default"):
             is_estimate=is_foreign_currency,  # True until a bank alert trues it up
             document=doc_text,
             source="receipt",
+            channel="receipt_upload",
+            fx_rate=conversion_info.get("exchange_rate"),
         )
         if save_res["status"] != "success":
             print(f"[upload-artifact] Supabase save failed: {save_res['error']}")
