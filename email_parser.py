@@ -44,6 +44,38 @@ def _normalize_vendor(name):
     return (name or "").strip().lower()
 
 
+def find_vendor_memory(user_id, vendor_key):
+    """Return (doc_id, metadata) of THIS user's remembered category for a vendor, or
+    None. Rows are always filtered by user_id: a rule one user taught Loamy must never
+    categorize another user's transactions."""
+    if not user_id or not vendor_key:
+        return None
+    found = vendor_memory_collection.get(where={"vendor_key": vendor_key, "user_id": str(user_id)})
+    if not found["ids"]:
+        return None
+    return found["ids"][0], found["metadatas"][0] or {}
+
+
+def save_vendor_memory(user_id, vendor, vendor_key, category):
+    """Remember a vendor->category rule for one user. The document id includes the
+    user, so two users can never overwrite each other's rule for the same vendor."""
+    if not user_id or not vendor_key:
+        return
+    doc_id = f"vendor_{user_id}_{vendor_key}"
+    existing = find_vendor_memory(user_id, vendor_key)
+    metadata = {
+        "user_id": str(user_id),
+        "vendor_key": vendor_key,
+        "vendor": vendor,
+        "category": category,
+        "updated_at": datetime.now().isoformat(),
+    }
+    if existing:
+        vendor_memory_collection.update(ids=[existing[0]], metadatas=[metadata])
+    else:
+        vendor_memory_collection.add(ids=[doc_id], documents=[f"{vendor} -> {category}"], metadatas=[metadata])
+
+
 def _extract_vendor_name(narration, tx_type="debit"):
     """
     Deterministically pull a clean counterparty name out of a bank narration.
@@ -130,8 +162,8 @@ def stage_review_item(user_id, user_name, source_id, narration, amount, tx_type,
     if review_queue_collection.get(where={"source_id": source_id})["ids"]:
         return "exists", None
 
-    known = vendor_memory_collection.get(where={"vendor_key": vendor_key})
-    remembered = (known["metadatas"][0] or {}).get("category") if known["ids"] else None
+    known = find_vendor_memory(user_id, vendor_key)
+    remembered = known[1].get("category") if known else None
     base_meta = {
         "user_id": user_id,
         "vendor": vendor_name,

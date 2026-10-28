@@ -1169,11 +1169,12 @@ async def add_to_review_queue(data: dict):
 
         # Smart Memory: if we already know this vendor, auto-resolve (don't nudge)
         vendor_key = _normalize_vendor(vendor)
-        known = vendor_memory_collection.get(where={"vendor_key": vendor_key})
-        if known["ids"]:
+        from email_parser import find_vendor_memory
+        known = find_vendor_memory(user_id, vendor_key)
+        if known:
             return {
                 "status": "success",
-                "data": {"auto_resolved": True, "category": known["metadatas"][0].get("category")},
+                "data": {"auto_resolved": True, "category": known[1].get("category")},
                 "error": None
             }
 

@@ -279,6 +279,52 @@ def transaction_source(row: dict) -> str:
     return row.get("source") or (meta.get("source") if isinstance(meta, dict) else None) or "receipt"
 
 
+CHANNEL_LABELS = {
+    "whatsapp": "WhatsApp",
+    "web_chat": "the web chat",
+    "receipt_upload": "a receipt upload",
+    "bank_email": "a bank email alert",
+}
+LEGACY_CHANNEL_LABEL = "logged before channel tracking"
+
+
+def transaction_channel(row: dict) -> str | None:
+    """The channel a row was recorded through, or None when it was never stored.
+
+    Never guessed: rows written before channel tracking return None. Bank
+    alerts are the one exception, since their source already proves the channel."""
+    meta = row.get("metadata") or {}
+    channel = meta.get("channel") if isinstance(meta, dict) else None
+    if channel:
+        return channel
+    if transaction_source(row) == "bank_alert":
+        return "bank_email"
+    return None
+
+
+def channel_label(channel: str | None) -> str:
+    return CHANNEL_LABELS.get(channel, channel) if channel else LEGACY_CHANNEL_LABEL
+
+
+def transaction_details(row: dict) -> dict:
+    """Provenance fields that let the chat answer 'how much in rupees?' or
+    'was this from WhatsApp?' from stored data instead of guessing."""
+    meta = row.get("metadata") or {}
+    if not isinstance(meta, dict):
+        meta = {}
+    channel = transaction_channel(row)
+    return {
+        "id": row.get("id"),
+        "original_amount": row.get("original_amount"),
+        "original_currency": row.get("original_currency") or row.get("currency") or "NGN",
+        "fx_rate": meta.get("fx_rate"),
+        "channel": channel,
+        "channel_label": channel_label(channel),
+        "logged_at": row.get("created_at"),
+        "user_words": meta.get("user_words"),
+    }
+
+
 def get_transactions(user_id: str, limit: int = 500) -> dict:
     try:
         res = (supabase.table("transactions").select("*")
@@ -770,6 +816,9 @@ def get_gmail_financial_context(user_id: str, limit: int = 30) -> dict:
                 "type": "income" if credit else "expense",
                 "source": "bank_alert",
                 "internal_transfer": categorizer.is_internal_transfer(a.get("category")),
+                "original_currency": "NGN",
+                "channel": "bank_email",
+                "channel_label": channel_label("bank_email"),
             })
 
         return _ok({
@@ -862,6 +911,7 @@ def get_chat_financial_context(user_id: str, limit: int = 50) -> dict:
                 "type": "income" if _is_income(r) else "expense",
                 "source": transaction_source(r),
                 "internal_transfer": _is_transfer(r),
+                **transaction_details(r),
             })
 
         # --- Merge in Gmail bank-alert data -----------------------------------

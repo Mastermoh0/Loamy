@@ -101,6 +101,26 @@ def record_chat_turn(user_id: str, user_message: str, reply: str,
     return res["status"] == "success"
 
 
+def _format_transaction_line(t: dict) -> str:
+    """One ledger line with the original currency and where it was logged, so
+    the model can answer from data instead of guessing."""
+    line = (f"  - {t.get('date')}: {t.get('vendor')} — ₦{t.get('amount', 0):,.2f} "
+            f"({t.get('category')}, {t.get('type')})")
+    currency = t.get("original_currency") or "NGN"
+    original = t.get("original_amount")
+    if currency != "NGN" and original:
+        rate = t.get("fx_rate")
+        line += f" [originally {float(original):,.2f} {currency}" + (f" @ {rate}" if rate else "") + "]"
+    line += f" [logged via {t.get('channel_label') or database.LEGACY_CHANNEL_LABEL}"
+    logged_at = str(t.get("logged_at") or "")[:16].replace("T", " ")
+    if logged_at:
+        line += f" on {logged_at}"
+    line += "]"
+    if t.get("user_words"):
+        line += f' [user said: "{t["user_words"]}"]'
+    return line
+
+
 def _format_context(ctx: dict) -> str:
     """Turn the structured context dict into a clean text payload for Gemini.
 
@@ -115,11 +135,8 @@ def _format_context(ctx: dict) -> str:
         f"  - {cat}: ₦{amt:,.2f}" for cat, amt in by_cat.items()
     ) or "  - No categorized spending yet."
 
-    ledger_lines = "\n".join(
-        f"  - {t.get('date')}: {t.get('vendor')} — ₦{t.get('amount', 0):,.2f} "
-        f"({t.get('category')}, {t.get('type')}, via {t.get('source', 'ledger')})"
-        for t in recent
-    ) or "  - No transactions recorded yet."
+    ledger_lines = "\n".join(_format_transaction_line(t) for t in recent) \
+        or "  - No transactions recorded yet."
 
     # Balance block: be explicit about which figure is the bank's truth anchor.
     bank_balance = summary.get("bank_balance")
@@ -333,16 +350,8 @@ def apply_chat_categorization(user_id: str, vendor: str, category: str, amount=N
 
     if updated:
         try:
-            existing = vendor_memory_collection.get(where={"vendor_key": vendor_key})
-            memory = {"vendor_key": vendor_key, "vendor": vendor, "category": category, "user_id": user_id}
-            if existing["ids"]:
-                vendor_memory_collection.update(ids=[existing["ids"][0]], metadatas=[memory])
-            else:
-                vendor_memory_collection.add(
-                    ids=[f"vm_{secrets.token_hex(6)}"],
-                    documents=[f"{vendor} = {category}"],
-                    metadatas=[memory],
-                )
+            from email_parser import save_vendor_memory
+            save_vendor_memory(user_id, vendor, vendor_key, category)
         except Exception as e:
             print(f"[CHAT-CATEGORIZE] vendor memory save failed: {e}")
     return updated
@@ -1425,11 +1434,13 @@ def _resolve_tx_date(raw) -> str:
 
 
 def add_manual_transaction(user_id: str, amount, currency: str = "NGN", category: str = "",
-                           description: str = "", date=None, source: str = "manual_cash") -> dict:
+                           description: str = "", date=None, source: str = "manual_cash",
+                           channel: str = "web_chat", user_words: str = "") -> dict:
     """Write a user-reported expense into the unified transactions ledger.
 
     `amount` is in `currency`; the stored `amount` is always NGN, with the
-    original figure kept alongside for foreign spends."""
+    original figure kept alongside for foreign spends. `channel` records where
+    the user reported it and `user_words` their exact message."""
     try:
         original_amount = float(re.sub(r"[^\d.]", "", str(amount)) or 0)
     except ValueError:
@@ -1468,6 +1479,9 @@ def add_manual_transaction(user_id: str, amount, currency: str = "NGN", category
         is_estimate=conversion["is_estimate"],
         document=doc_text,
         source=source,
+        channel=channel,
+        fx_rate=conversion.get("exchange_rate"),
+        user_words=(user_words or "").strip()[:500] or None,
     )
     if save_res["status"] != "success":
         return save_res
@@ -1598,6 +1612,7 @@ async def _try_currency_correction(text: str, user_id: str):
     result = await asyncio.to_thread(
         add_manual_transaction, user_id, amount, currency, pending["category"],
         pending["description"], pending["date"], "manual_cash",
+        pending.get("channel") or "web_chat", pending.get("user_words") or "",
     )
     if result["status"] != "success":
         return "I couldn't update that expense just now. Please try again in a moment."
@@ -1620,7 +1635,7 @@ _recent_manual_logs: dict = {}
 _MANUAL_LOG_DEDUPE_SECONDS = 120
 
 
-async def _try_log_manual_transaction(text: str, user_id: str):
+async def _try_log_manual_transaction(text: str, user_id: str, channel: str = "web_chat"):
     """Returns a confirmation card if the message was a spend report, else None.
 
     The same message re-sent within a couple of minutes (a retry after an error,
@@ -1634,13 +1649,13 @@ async def _try_log_manual_transaction(text: str, user_id: str):
     if previous:
         return "I already logged that a moment ago, so I haven't added it again.\n\n" + previous[1]
 
-    reply = await _log_manual_transactions(text, user_id)
+    reply = await _log_manual_transactions(text, user_id, channel)
     if reply and reply.startswith("\u270d"):
         _recent_manual_logs[key] = (now, reply)
     return reply
 
 
-async def _log_manual_transactions(text: str, user_id: str):
+async def _log_manual_transactions(text: str, user_id: str, channel: str = "web_chat"):
     if not re.search(r"\d", text or ""):
         return None
     corrected = await _try_currency_correction(text, user_id)
@@ -1665,6 +1680,8 @@ async def _log_manual_transactions(text: str, user_id: str):
             args.get("description") or "",
             args.get("date"),
             "manual_cash",
+            channel,
+            text,
         )
         if result["status"] == "success":
             logged_transactions.append(result["data"])
@@ -1701,6 +1718,7 @@ async def _log_manual_transactions(text: str, user_id: str):
             "currency": tx["original_currency"], "amount_ngn": tx["amount_ngn"],
             "category": tx["category"], "description": tx["description"],
             "date": tx["date"], "logged_at": time.time(),
+            "channel": channel, "user_words": text,
         }
         currency_note = f'\n_No currency given - if this was in {other}, reply "{amount_label} {other}" to update._'
 
@@ -1735,7 +1753,7 @@ async def _whatsapp_ai_handler(text: str, from_phone: str) -> str:
     user_id = user_row["user_id"]
 
     # B. "I spent 1000 MUR on groceries" -> Gemini function call -> ledger row.
-    logged = await _try_log_manual_transaction(text, user_id)
+    logged = await _try_log_manual_transaction(text, user_id, "whatsapp")
     if logged:
         return logged
 

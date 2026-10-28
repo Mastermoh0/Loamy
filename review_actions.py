@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 import categorizer
 import database
 import transfers
-from email_parser import _is_real_user_id, _normalize_vendor
+from email_parser import _is_real_user_id, _normalize_vendor, save_vendor_memory
 from models import gmail_data_collection, review_queue_collection, vendor_memory_collection
 
 ASK_COOLDOWN = timedelta(hours=6)
@@ -58,14 +58,7 @@ def _remember_vendor(meta: dict, category: str) -> None:
     try:
         vendor = meta.get("vendor", "")
         vendor_key = _normalize_vendor(vendor)
-        payload = {"vendor_key": vendor_key, "vendor": vendor, "category": category,
-                   "user_id": meta.get("user_id", "default")}
-        existing = vendor_memory_collection.get(where={"vendor_key": vendor_key})
-        if existing["ids"]:
-            vendor_memory_collection.update(ids=[existing["ids"][0]], metadatas=[payload])
-        else:
-            vendor_memory_collection.add(
-                ids=[f"vm_{uuid.uuid4().hex[:12]}"], documents=[f"{vendor} = {category}"], metadatas=[payload])
+        save_vendor_memory(meta.get("user_id"), vendor, vendor_key, category)
     except Exception as e:
         print(f"[REVIEW] Vendor memory save error: {e}")
 
