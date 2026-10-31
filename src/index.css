@@ -21,3 +21,30 @@ a {
 button {
   font-family: inherit;
 }
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+img {
+  max-width: 100%;
+}
+
+@media (max-width: 768px) {
+  /* 16px inputs stop iOS Safari from zooming the page on focus */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  button,
+  a,
+  select {
+    touch-action: manipulation;
+  }
+}

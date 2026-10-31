@@ -876,6 +876,99 @@
   }
 }
 
+/* ---- Phone layout: slim brand bar, bottom tabs handle navigation ---- */
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: 0 14px 24px;
+  }
+
+  .dashboard-nav {
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0 -14px 18px;
+    padding: calc(12px + env(safe-area-inset-top)) 18px 12px;
+    top: 0;
+    border-radius: 0 0 22px 22px;
+  }
+
+  .nav-brand h3 {
+    font-size: 1.3rem;
+  }
+
+  /* Gmail, Chat and Review Queue live in the bottom tab bar on phones */
+  .nav-actions > *:not(.logout-btn) {
+    display: none;
+  }
+
+  .nav-actions .logout-btn {
+    width: 40px;
+    height: 40px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .greeting-section {
+    margin-bottom: 18px;
+  }
+
+  .greeting-section h1 {
+    font-size: 1.5rem;
+  }
+
+  .greeting-section p {
+    font-size: 0.95rem;
+  }
+
+  .dashboard-grid {
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+
+  .card {
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .card:hover {
+    box-shadow: none;
+  }
+
+  .cashflow-grid {
+    gap: 10px;
+  }
+
+  .transaction-item,
+  .account-item {
+    gap: 10px;
+  }
+
+  .transaction-desc,
+  .account-name {
+    overflow-wrap: anywhere;
+  }
+
+  .category-buttons {
+    flex-wrap: wrap;
+  }
+
+  .category-btn {
+    min-height: 40px;
+  }
+
+  .quick-actions {
+    gap: 10px;
+  }
+
+  .quick-action-btn {
+    padding: 14px 20px;
+  }
+
+  .logout-modal {
+    width: calc(100% - 32px);
+  }
+}
+
 /* ---- Logout confirmation modal ---- */
 .logout-modal-overlay {
     position: fixed;

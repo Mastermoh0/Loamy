@@ -6,7 +6,7 @@ import {
     faRightFromBracket, faArrowUp, faPaperclip, faEnvelope,
     faCoffee, faLaptop, faCartShopping, faCalculator,
     faEllipsis, faPen, faTrash, faCheck, faFileInvoiceDollar, faBuildingColumns,
-    faFilePdf, faFileWord, faFileExcel, faFileImage, faFileLines
+    faFilePdf, faFileWord, faFileExcel, faFileImage, faFileLines, faBars
 } from "@fortawesome/free-solid-svg-icons";
 import Logo from "./assets/LoamyLogo.png";
 import ReviewQueue from "./ReviewQueue.jsx";
@@ -73,6 +73,15 @@ const ChatPage = () => {
 
     // Logout confirmation modal
     const [showLogoutModal, setShowLogoutModal] = useState(false);
+    // Phones: the sidebar becomes a slide-in drawer opened from the header.
+    const [drawerOpen, setDrawerOpen] = useState(false);
+
+    // Close the drawer after any navigation-style tap inside it (new chat, a
+    // chat, a link) but not when opening a chat's rename/delete menu.
+    const handleDrawerTap = (e) => {
+        if (e.target.closest(".chat-menu-btn, .chat-dropdown")) return;
+        if (e.target.closest("a, .chat-list-item, .new-chat-btn")) setDrawerOpen(false);
+    };
     
     const chatDisplayRef = useRef(null);
     const fileInputRef = useRef(null);
@@ -593,7 +602,16 @@ const createNewChat = async (title) => {
     return (
         <div className="chat-app-container">
             {/* Sidebar */}
-            <aside className="chat-sidebar">
+            <div
+                className={`chat-drawer-backdrop${drawerOpen ? " open" : ""}`}
+                onClick={() => setDrawerOpen(false)}
+                aria-hidden="true"
+            />
+            <aside
+                id="chat-sidebar"
+                className={`chat-sidebar${drawerOpen ? " open" : ""}`}
+                onClick={handleDrawerTap}
+            >
                 <div className="sidebar-top">
                     <div className="logo-section">
                         <img src={Logo} alt="Loamy" className="sidebar-logo" />
@@ -708,6 +726,16 @@ const createNewChat = async (title) => {
             <main className="chat-main">
                 <header className="chat-header">
                     <div className="model-selector">
+                        <button
+                            type="button"
+                            className="chat-menu-toggle"
+                            aria-label="Open menu and chats"
+                            aria-controls="chat-sidebar"
+                            aria-expanded={drawerOpen}
+                            onClick={() => setDrawerOpen(true)}
+                        >
+                            <FontAwesomeIcon icon={faBars} />
+                        </button>
                         <span>Loamy AI Pro</span>
                     </div>
                     <ReviewQueue

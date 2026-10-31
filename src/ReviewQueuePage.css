@@ -208,6 +208,16 @@
   }
 }
 
+@media (max-width: 768px) {
+  .invoices-main:has(.rq-layout) {
+    padding: calc(18px + env(safe-area-inset-top)) 12px 24px;
+  }
+  .rq-list {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+}
+
 /* List of nudges - responsive grid so cards fill the available width */
 .rq-list {
   display: grid;

@@ -450,4 +450,8 @@
         width: 100%;
         justify-content: space-between;
     }
+
+    .gmail-content {
+        padding: calc(18px + env(safe-area-inset-top)) 14px 24px;
+    }
 }

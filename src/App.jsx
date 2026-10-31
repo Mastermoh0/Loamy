@@ -13,6 +13,8 @@ import SettingsPage from "./SettingsPage.jsx";
 import AccountDetail from "./pages/AccountDetail.jsx";
 import AllAccountsOverview from "./pages/AllAccountsOverview.jsx";
 
+import MobileNav from "./components/MobileNav.jsx";
+
 // Global activity-driven sync. Wrapping the whole app (rather than a single
 // page) means ANY interaction anywhere can trigger an automatic bank sync.
 import { useGlobalActivitySync } from "./hooks/useGlobalActivitySync";
@@ -23,6 +25,7 @@ export default function App() {
   useGlobalActivitySync({ enabled: true, debounceMs: 2000 });
 
   return (
+    <>
     <Routes>
       {/* Auth Routes */}
       <Route path="/" element={<Login />} />
@@ -45,5 +48,7 @@ export default function App() {
       {/* Aliases for convenience */}
       <Route path="/spending" element={<Dashboard />} />
     </Routes>
+    <MobileNav />
+    </>
   );
 }

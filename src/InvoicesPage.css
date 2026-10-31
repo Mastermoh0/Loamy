@@ -431,3 +431,47 @@
     justify-content: space-between;
   }
 }
+
+/* Phones: tighter page, full-width primary action, bottom-sheet style modal */
+@media (max-width: 768px) {
+  .invoices-main {
+    width: 100%;
+    max-width: 100%;
+    padding: calc(18px + env(safe-area-inset-top)) 14px 24px;
+  }
+
+  .invoices-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .invoices-header {
+    width: 100%;
+    margin-bottom: 18px;
+  }
+
+  .add-invoice-btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 48px;
+  }
+
+  .summary-cards {
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .invoice-form-modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: 92vh;
+    max-height: 92dvh;
+    overflow-y: auto;
+    border-radius: 22px 22px 0 0;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  }
+}
