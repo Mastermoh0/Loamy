@@ -1,0 +1,187 @@
+.settings-main { max-width: 1100px; }
+
+.settings-header h1 { font-size: 2rem; color: #1a1a1a; margin: 0; }
+.settings-header p { color: #666; margin: 6px 0 28px; }
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  gap: 28px;
+  align-items: start;
+}
+
+/* Left: the same rounded rows as the mobile settings screen */
+.settings-list { display: flex; flex-direction: column; gap: 10px; }
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 20px;
+  background: #fff;
+  border: 1px solid #e8e8e6;
+  border-radius: 22px;
+  font: inherit;
+  font-size: 0.98rem;
+  color: #1a1a1a;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.settings-row:hover { border-color: #c9d9ca; }
+.settings-row:focus-visible,
+.settings-logout:focus-visible,
+.settings-link-btn:focus-visible { outline: 2px solid #2E7D32; outline-offset: 2px; }
+.settings-row.active { border-color: #2E7D32; box-shadow: 0 0 0 1px #2E7D32; }
+
+.settings-row-end { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: #6b7280; }
+.settings-row-value { color: #6b7280; font-size: 0.9rem; }
+.settings-row-pro { color: #0f6b3a; font-weight: 600; font-size: 0.95rem; }
+
+.settings-logout {
+  align-self: flex-start;
+  margin: 8px 0 0 8px;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  font: inherit;
+  font-weight: 500;
+  color: #e5484d;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.settings-logout:hover { background: #fdecec; }
+
+/* Right: detail panel */
+.settings-detail {
+  background: #fff;
+  border: 1px solid #e8e8e6;
+  border-radius: 22px;
+  padding: 28px 32px;
+  min-height: 320px;
+}
+.settings-detail h2 { margin: 0; font-size: 1.35rem; color: #1a1a1a; }
+.settings-detail-sub { margin: 4px 0 24px; color: #6b7280; font-size: 0.9rem; }
+.settings-back { display: none; }
+
+.settings-profile { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+.settings-profile h3 { margin: 0; font-size: 1.05rem; }
+.settings-profile p { margin: 2px 0 0; color: #6b7280; font-size: 0.9rem; }
+.settings-avatar {
+  width: 52px; height: 52px; border-radius: 50%;
+  background: #2E7D32; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem; font-weight: 600;
+}
+.settings-badge {
+  margin-left: auto;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #e8f5e9;
+  color: #0f6b3a;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.settings-fields { margin: 0; }
+.settings-fields > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 14px 0;
+  border-top: 1px solid #f0f0ee;
+}
+.settings-fields dt { color: #6b7280; font-size: 0.9rem; }
+.settings-fields dd { margin: 0; color: #1a1a1a; font-size: 0.95rem; text-align: right; max-width: 60%; }
+
+.settings-note, .settings-muted { margin: 20px 0 0; color: #6b7280; font-size: 0.85rem; line-height: 1.5; }
+.settings-error { margin: 12px 0; color: #c62828; font-size: 0.9rem; }
+.settings-lede { margin: 0 0 16px; color: #555; font-size: 0.9rem; line-height: 1.6; }
+.settings-subhead { margin: 0 0 8px; font-size: 1rem; }
+
+/* Integrations */
+.settings-integrations { list-style: none; margin: 0; padding: 0; }
+.settings-integration {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px 0;
+  border-top: 1px solid #f0f0ee;
+}
+.settings-integration:first-child { border-top: none; padding-top: 0; }
+.settings-integration-icon {
+  width: 40px; height: 40px; border-radius: 12px;
+  background: #f4f7f4; color: #2E7D32;
+  display: flex; align-items: center; justify-content: center;
+}
+.settings-integration-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.settings-integration-text strong { font-size: 0.95rem; }
+.settings-integration-text span { color: #6b7280; font-size: 0.82rem; }
+.settings-status { font-size: 0.82rem; color: #6b7280; }
+.settings-status.on { color: #0f6b3a; font-weight: 600; }
+.settings-link-btn {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid #d5d5d2;
+  color: #1a1a1a;
+  text-decoration: none;
+  font-size: 0.85rem;
+  transition: border-color 0.15s, color 0.15s;
+}
+.settings-link-btn:hover { border-color: #2E7D32; color: #2E7D32; }
+
+/* Remembered facts */
+.settings-facts { list-style: none; margin: 0; padding: 0; }
+.settings-facts li {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid #f0f0ee;
+}
+.settings-facts li > div { display: flex; flex-direction: column; gap: 2px; font-size: 0.92rem; line-height: 1.5; }
+.settings-facts small { color: #6b7280; font-size: 0.78rem; }
+.settings-icon-btn {
+  flex-shrink: 0;
+  width: 36px; height: 36px;
+  border: none; border-radius: 10px;
+  background: none; color: #9a9a96;
+  cursor: pointer;
+}
+.settings-icon-btn:hover:not(:disabled) { background: #fdecec; color: #e5484d; }
+.settings-icon-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* Logout confirmation */
+.settings-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(20, 20, 20, 0.45);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  z-index: 100;
+}
+.settings-modal {
+  width: 100%; max-width: 380px;
+  background: #fff; border-radius: 20px; padding: 28px;
+}
+.settings-modal h3 { margin: 0 0 8px; }
+.settings-modal p { margin: 0 0 24px; color: #6b7280; font-size: 0.9rem; line-height: 1.5; }
+.settings-modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.settings-btn-ghost, .settings-btn-danger {
+  padding: 10px 20px; border-radius: 999px; font: inherit; font-size: 0.9rem; cursor: pointer;
+}
+.settings-btn-ghost { background: none; border: 1px solid #d5d5d2; color: #1a1a1a; }
+.settings-btn-danger { background: #e5484d; border: 1px solid #e5484d; color: #fff; }
+
+/* Narrow screens: behave like the mobile template (list, then detail) */
+@media (max-width: 900px) {
+  .settings-page .sidebar { display: none; }
+  .settings-page .invoices-main { margin-left: 0; padding: 24px 16px; }
+  .settings-header { text-align: center; }
+  .settings-layout { grid-template-columns: 1fr; }
+  .settings-layout[data-view="list"] .settings-detail { display: none; }
+  .settings-layout[data-view="detail"] .settings-list { display: none; }
+  .settings-back {
+    display: inline-flex; align-items: center; gap: 8px;
+    margin-bottom: 16px; padding: 0;
+    background: none; border: none; font: inherit; color: #2E7D32; cursor: pointer;
+  }
+  .settings-detail { padding: 22px 20px; }
+}

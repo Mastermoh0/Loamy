@@ -36,12 +36,15 @@ def _naira(value) -> str:
     return f"\u20a6{float(value or 0):,.0f}"
 
 
-def _tag_source_transaction(meta: dict, category: str) -> None:
+def _tag_source_transaction(meta: dict, category: str, note: str = "") -> None:
     source_id = meta.get("source_id", "")
     if source_id.startswith("ledger_"):
-        res = database.update_transaction_category(source_id[len("ledger_"):], category)
+        tx_id = source_id[len("ledger_"):]
+        res = database.update_transaction_category(tx_id, category)
         if res["status"] != "success":
             print(f"[REVIEW] Could not tag ledger transaction: {res['error']}")
+        if note:
+            database.merge_transaction_metadata(tx_id, {"user_words": note[:500]})
     elif source_id:
         try:
             tx = gmail_data_collection.get(ids=[source_id])
@@ -49,6 +52,8 @@ def _tag_source_transaction(meta: dict, category: str) -> None:
                 tx_meta = tx["metadatas"][0]
                 tx_meta["category"] = category
                 tx_meta["reviewed"] = True
+                if note:
+                    tx_meta["user_words"] = note[:500]
                 gmail_data_collection.update(ids=[source_id], metadatas=[tx_meta])
         except Exception as e:
             print(f"[REVIEW] Could not tag transaction: {e}")
@@ -135,10 +140,26 @@ def _resolve_pending_transfer(review_id: str, meta: dict, reply: str, history) -
     if categorizer.is_internal_transfer(category):
         return _file_as_transfer(review_id, meta, note)
     transfers.reject_transfer(review_id)
-    return resolve_item(review_id, reply, category=category, history=history)
+    return resolve_item(review_id, reply, category=category, history=history,
+                        fact=understood.get("fact") or "")
 
 
-def resolve_item(review_id: str, reply: str = "", category: str = "", history=None) -> dict:
+def _remember_context(meta: dict, note: str, fact: str) -> None:
+    """Keep what the user said as durable memory: the durable fact, if any, goes to
+    their personal memory linked to this transaction. Never blocks resolving the item."""
+    if not fact:
+        return
+    try:
+        import user_memory
+        source_id = meta.get("source_id", "")
+        tx_id = source_id[len("ledger_"):] if source_id.startswith("ledger_") else source_id
+        user_memory.remember_fact(meta.get("user_id"), fact, source_tx_id=tx_id,
+                                  vendor=meta.get("vendor", ""), note=note)
+    except Exception as e:
+        print(f"[REVIEW] memory save error: {e}")
+
+
+def resolve_item(review_id: str, reply: str = "", category: str = "", history=None, fact: str = "") -> dict:
     """Understand `reply` (plus earlier messages in `history`) and file the item.
 
     Data shape: {"resolved": bool, "reply": follow-up question} when still open,
@@ -166,6 +187,7 @@ def resolve_item(review_id: str, reply: str = "", category: str = "", history=No
             vendor, meta.get("amount", 0), meta.get("transaction_type") or "debit", note)
         category = understood.get("category")
         ai_reply = understood.get("reply") or ""
+        fact = understood.get("fact") or fact
         if not category:
             return _ok({"resolved": False, "unrelated": bool(understood.get("unrelated")),
                         "reply": ai_reply or "What was this money for?"})
@@ -182,8 +204,10 @@ def resolve_item(review_id: str, reply: str = "", category: str = "", history=No
     meta.update({"status": "resolved", "user_reply": reply, "category": category,
                  "resolved_at": datetime.now().isoformat()})
     review_queue_collection.update(ids=[review_id], metadatas=[meta])
-    _tag_source_transaction(meta, category)
+    note = " | ".join([*(h for h in (history or []) if h), reply])
+    _tag_source_transaction(meta, category, note)
     _remember_vendor(meta, category)
+    _remember_context(meta, note, fact)
 
     confirmation = ai_reply or f"Got it. Logged {_naira(meta.get('amount'))} under {category}."
     return _ok({"resolved": True, "category": category, "vendor": vendor,
@@ -251,17 +275,52 @@ def _awaiting_item(user_id: str):
     return (best[1], best[2]) if best else None
 
 
+_REQUEST_START_RE = re.compile(
+    r"^\s*(?:(?:hey|hi|hello|ok|okay|so|and|please|pls|abeg|loamy)[\s,]+)*"
+    r"(?:how|what|whats|what's|why|when|where|who|which|did|do|does|is|are|was|were|can|could|would|will|"
+    r"show|tell|list|find|give|check|look|search|explain|compare|calculate|convert|summari[sz]e|remind|have|has)\b",
+    re.IGNORECASE,
+)
+_AMOUNT_RE = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*(k\b)?", re.IGNORECASE)
+
+
+def is_new_request(message: str) -> bool:
+    """True when the message is the user asking Loamy something (a question,
+    lookup or command) rather than explaining a transaction. Such a message
+    must be answered on its own terms, never read as an answer to a review item."""
+    text = (message or "").strip()
+    return bool(text) and ("?" in text or bool(_REQUEST_START_RE.match(text)))
+
+
+def _mentions_other_amount(message: str, item_amount) -> bool:
+    """True when the message quotes an amount (100 or more) and none of them is this item's."""
+    target = float(item_amount or 0)
+    quoted = []
+    for number, thousands in _AMOUNT_RE.findall(message or ""):
+        try:
+            value = float(number.replace(",", "")) * (1000 if thousands else 1)
+        except ValueError:
+            continue
+        if value >= 100:
+            quoted.append(value)
+    return bool(quoted) and target > 0 and not any(abs(v - target) <= target * 0.02 for v in quoted)
+
+
 def try_answer_from_chat(user_id: str, message: str):
     """If Loamy just asked about a transaction in chat, treat `message` as the
     answer. Returns the reply to send, or None when the message is something
     else and normal chat should handle it."""
     if not _is_real_user_id(user_id) or not (message or "").strip():
         return None
+    if is_new_request(message):
+        return None
     try:
         awaiting = _awaiting_item(user_id)
         if not awaiting:
             return None
         rid, meta = awaiting
+        if _mentions_other_amount(message, meta.get("amount")):
+            return None
         earlier = [h for h in str(meta.get("chat_history") or "").split(" | ") if h]
         res = resolve_item(rid, message, history=earlier)
         data = res.get("data") or {}
