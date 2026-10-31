@@ -251,17 +251,52 @@ def _awaiting_item(user_id: str):
     return (best[1], best[2]) if best else None
 
 
+_REQUEST_START_RE = re.compile(
+    r"^\s*(?:(?:hey|hi|hello|ok|okay|so|and|please|pls|abeg|loamy)[\s,]+)*"
+    r"(?:how|what|whats|what's|why|when|where|who|which|did|do|does|is|are|was|were|can|could|would|will|"
+    r"show|tell|list|find|give|check|look|search|explain|compare|calculate|convert|summari[sz]e|remind|have|has)\b",
+    re.IGNORECASE,
+)
+_AMOUNT_RE = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*(k\b)?", re.IGNORECASE)
+
+
+def is_new_request(message: str) -> bool:
+    """True when the message is the user asking Loamy something (a question,
+    lookup or command) rather than explaining a transaction. Such a message
+    must be answered on its own terms, never read as an answer to a review item."""
+    text = (message or "").strip()
+    return bool(text) and ("?" in text or bool(_REQUEST_START_RE.match(text)))
+
+
+def _mentions_other_amount(message: str, item_amount) -> bool:
+    """True when the message quotes an amount (100 or more) and none of them is this item's."""
+    target = float(item_amount or 0)
+    quoted = []
+    for number, thousands in _AMOUNT_RE.findall(message or ""):
+        try:
+            value = float(number.replace(",", "")) * (1000 if thousands else 1)
+        except ValueError:
+            continue
+        if value >= 100:
+            quoted.append(value)
+    return bool(quoted) and target > 0 and not any(abs(v - target) <= target * 0.02 for v in quoted)
+
+
 def try_answer_from_chat(user_id: str, message: str):
     """If Loamy just asked about a transaction in chat, treat `message` as the
     answer. Returns the reply to send, or None when the message is something
     else and normal chat should handle it."""
     if not _is_real_user_id(user_id) or not (message or "").strip():
         return None
+    if is_new_request(message):
+        return None
     try:
         awaiting = _awaiting_item(user_id)
         if not awaiting:
             return None
         rid, meta = awaiting
+        if _mentions_other_amount(message, meta.get("amount")):
+            return None
         earlier = [h for h in str(meta.get("chat_history") or "").split(" | ") if h]
         res = resolve_item(rid, message, history=earlier)
         data = res.get("data") or {}

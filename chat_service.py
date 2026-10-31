@@ -81,6 +81,27 @@ Rules:
   continuous conversation: if the user logged something on WhatsApp, you know about it here.
 """
 
+# Applies to every chat path. Kept free of braces so it can sit inside f-strings.
+_PRIORITY_RULES = """=== PRIORITY ORDER (HIGHEST FIRST) ===
+1. THE USER'S CURRENT MESSAGE. Answer exactly what they just asked, fully and directly,
+   before anything else. Never deflect, never answer a different question, and never
+   treat their message as a reply to something you asked earlier unless it plainly is one.
+   A question (how much, did you, was it, what, why, show me, find) is a NEW REQUEST,
+   not an answer to your earlier question. Look the thing up in the data and answer it.
+2. THE CONVERSATION'S CURRENT TOPIC. Stay on it until the user moves on.
+3. HOUSEKEEPING. Review Queue items are housekeeping. You do NOT mention them yourself;
+   the system adds the Review Queue question when it is the right moment. Never write
+   "one more thing", "also, I wanted to ask" or any question about pending review items.
+   The only time to signal that the moment is right is the REVIEW_QUEUE marker rule below.
+
+REVIEW_QUEUE MARKER: Add one last line containing exactly * REVIEW_QUEUE: OK only when
+the user's topic is finished: they said thanks, ok, got it, goodbye, or just
+finished categorizing an item and asked nothing new, or the message is a bare greeting
+with no request. Do NOT add it when the user is asking a question, looking up data,
+discussing an expense, changing the subject, or you are waiting for their answer.
+When unsure, leave it out.
+"""
+
 from whatsapp import WHATSAPP_FORMAT_RULES as _WHATSAPP_FORMAT_RULES
 
 HISTORY_CONTEXT_LIMIT = 15
@@ -546,7 +567,7 @@ def handle_chat_turn(user_id: str, message: str, chat_id: str = None, channel: s
 
     # 2. Ask Gemini with persona + context + cross-channel history + the question.
     try:
-        persona = _ADVISOR_PERSONA + (_WHATSAPP_FORMAT_RULES if channel == "whatsapp" else "")
+        persona = _ADVISOR_PERSONA + "\n" + _PRIORITY_RULES + (_WHATSAPP_FORMAT_RULES if channel == "whatsapp" else "")
         history_block = (f"\n\n=== RECENT CONVERSATION (all channels, oldest first) ===\n{history_text}"
                          if history_text else "")
         prompt = f"{persona}\n\n{context_text}{history_block}\n\nUser question: {message}\n\nYour answer:"
@@ -1084,6 +1105,8 @@ async def chat_with_history(query: dict):
         You are Loamy, the user's personal wealth manager: a warm, sharp financial advisor who
         knows their money across every connected bank. Talk to them like a trusted human advisor
         sitting across the table, not like a report generator.
+
+        {_PRIORITY_RULES}
         {date_context}
         
         === USER'S MONEY ACROSS ALL BANKS ===
@@ -1383,11 +1406,18 @@ async def chat_with_history(query: dict):
         except Exception as e:
             print(f"[CHAT-CATEGORIZE] bank charges fallback failed: {e}")
 
-        # If Loamy has an unanswered transaction question, bring it up naturally.
+        # Review Queue questions are housekeeping: only raise one when the user's
+        # topic is finished and we are not waiting on them (see _PRIORITY_RULES).
+        topic_closed = bool(re.search(r"REVIEW_QUEUE:\s*OK", reply_text))
+        reply_text = "\n".join(
+            line for line in reply_text.split("\n") if not re.search(r"REVIEW_QUEUE:", line)
+        ).strip()
         try:
-            follow_up = await asyncio.to_thread(review_actions.next_question, user_id)
-            if follow_up:
-                reply_text = f"{reply_text}\n\n{follow_up}".strip()
+            idle = (topic_closed or categorized_count > 0) and not reply_text.endswith("?")
+            if idle and not review_actions.is_new_request(user_msg):
+                follow_up = await asyncio.to_thread(review_actions.next_question, user_id)
+                if follow_up:
+                    reply_text = f"{reply_text}\n\n{follow_up}".strip()
         except Exception as e:
             print(f"[CHAT-CLARIFY] could not append question: {e}")
 
