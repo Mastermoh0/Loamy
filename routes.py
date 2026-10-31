@@ -1169,12 +1169,12 @@ async def add_to_review_queue(data: dict):
 
         # Smart Memory: if we already know this vendor, auto-resolve (don't nudge)
         vendor_key = _normalize_vendor(vendor)
-        from email_parser import find_vendor_memory
-        known = find_vendor_memory(user_id, vendor_key)
-        if known:
+        from email_parser import trusted_category
+        trusted = trusted_category(user_id, vendor_key, data.get("narration") or vendor, vendor)
+        if trusted:
             return {
                 "status": "success",
-                "data": {"auto_resolved": True, "category": known[1].get("category")},
+                "data": {"auto_resolved": True, "category": trusted},
                 "error": None
             }
 
@@ -1467,6 +1467,28 @@ def _attach_category_suggestions(items: list) -> None:
             "description": it.get("vendor") or "",
             "type": it.get("transaction_type") or "debit",
         })
+
+
+@router.get("/memory/{user_id}")
+async def get_user_memory(user_id: str):
+    """What Loamy has learned about this user, newest first, so they can review it."""
+    if not _is_real_user_id(user_id):
+        return {"status": "error", "data": None, "error": "invalid_user_id"}
+    import user_memory
+    facts = await asyncio.to_thread(user_memory.list_facts, user_id)
+    return {"status": "success", "data": facts, "error": None}
+
+
+@router.delete("/memory/{user_id}/{fact_id}")
+async def delete_user_memory(user_id: str, fact_id: str):
+    """Forget one learned fact. Scoped by user_id so only the owner's facts can be removed."""
+    if not _is_real_user_id(user_id):
+        return {"status": "error", "data": None, "error": "invalid_user_id"}
+    import user_memory
+    ok = await asyncio.to_thread(user_memory.delete_fact, user_id, fact_id)
+    if not ok:
+        return {"status": "error", "data": None, "error": "could_not_delete"}
+    return {"status": "success", "data": {"deleted": fact_id}, "error": None}
 
 
 @router.get("/review-queue/{user_id}")

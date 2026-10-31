@@ -468,7 +468,12 @@ Guidance:
 - If the message is clearly NOT about this transaction (for example a general question about their
   finances), set category to null and "unrelated" to true.
 
-Return ONLY JSON: {{"category": "<allowed category or null>", "unrelated": false, "reply": "<one friendly sentence confirming what you logged, or the follow-up question>"}}"""
+- "fact": ONLY when the note reveals something durable and useful about the user's life or business
+  (a hobby, a regular activity, what their shop sells, who a person is to them, a recurring commitment),
+  write it as one short third-person sentence such as "Plays soccer" or "Their brother Tunde borrows money
+  from them". Do NOT record one-off purchases, amounts, dates or anything you are guessing. Otherwise use null.
+
+Return ONLY JSON: {{"category": "<allowed category or null>", "unrelated": false, "fact": "<durable fact or null>", "reply": "<one friendly sentence confirming what you logged, or the follow-up question>"}}"""
 
     try:
         text = gemini_gateway.generate(
@@ -492,7 +497,10 @@ Return ONLY JSON: {{"category": "<allowed category or null>", "unrelated": false
     unrelated = bool(parsed.get("unrelated")) and not category
     if not category and not reply:
         reply = "What was this money for?"
-    return {"category": category, "reply": reply, "unrelated": unrelated}
+    fact = str(parsed.get("fact") or "").strip()
+    if not category or fact.lower() in ("null", "none"):
+        fact = ""
+    return {"category": category, "reply": reply, "unrelated": unrelated, "fact": fact[:200]}
 
 
 def categorize_one(amount, vendor, description, tx_type="debit") -> dict:

@@ -94,6 +94,15 @@ _PRIORITY_RULES = """=== PRIORITY ORDER (HIGHEST FIRST) ===
    "one more thing", "also, I wanted to ask" or any question about pending review items.
    The only time to signal that the moment is right is the REVIEW_QUEUE marker rule below.
 
+LOOKUPS: The recent transactions in your context are only a sample. When the user refers to
+a specific payment, an amount, a date, a vendor, or "it" and you cannot see the full record
+in your context, call find_transactions instead of guessing or saying you have no data.
+Searching an amount also matches the original currency amount (200 matches 200 MUR).
+
+WHAT YOU KNOW ABOUT THE USER: Facts in the "WHAT LOAMY HAS LEARNED" block came from the
+user's own words. Use them quietly to interpret spending. Never present a learned fact as
+certain when it conflicts with what the user just said; the user's current message wins.
+
 REVIEW_QUEUE MARKER: Add one last line containing exactly * REVIEW_QUEUE: OK only when
 the user's topic is finished: they said thanks, ok, got it, goodbye, or just
 finished categorizing an item and asked nothing new, or the message is a bare greeting
@@ -385,15 +394,63 @@ def apply_chat_categorization(user_id: str, vendor: str, category: str, amount=N
     return updated
 
 
+MAX_LOOKUPS_PER_TURN = 3
+
+
+def _memory_block(user_id: str, message: str) -> str:
+    """What Loamy has learned about this user, as a prompt section ("" when nothing or on failure)."""
+    try:
+        import user_memory
+        block = user_memory.facts_for_prompt(user_id, message)
+        return f"\n\n{block}" if block else ""
+    except Exception as e:
+        print(f"[chat_service] memory recall failed: {e}")
+        return ""
+
+
+def _generate_with_lookup(prompt: str, user_id: str) -> str:
+    """One chat generation that may search the user's full history.
+
+    The model sees `find_transactions` and calls it only when the recent lines in its
+    context are not enough. No lookup means exactly one Gemini call, as before. A lookup
+    adds one more call that carries the results. Both go through the gateway limits."""
+    import transaction_search
+
+    response = gemini_gateway.generate_response(
+        "chat_reply", prompt, user_id=user_id, temperature=0.4, max_output_tokens=4096,
+        tools=[transaction_search.FIND_TRANSACTIONS_TOOL],
+    )
+    calls = [c for c in gemini_gateway.function_calls(response) if c["name"] == "find_transactions"]
+    if not calls:
+        return (response.text or "").strip()
+
+    results = []
+    for call in calls[:MAX_LOOKUPS_PER_TURN]:
+        try:
+            found = transaction_search.find_transactions(user_id, **call["args"])
+        except Exception as e:
+            print(f"[chat_service] find_transactions failed: {e}")
+            found = {"total_matches": 0, "returned": 0, "transactions": [], "error": "lookup failed"}
+        results.append({"search": call["args"], "result": found})
+
+    followup = (
+        f"{prompt}\n\n=== LOOKUP RESULTS (searched the user's full history just now; authoritative) ===\n"
+        f"{json.dumps(results, ensure_ascii=False, default=str)}\n"
+        "Answer the user's question using these results. If total_matches is 0, say you could not "
+        "find it and ask one specific clarifying question. If several match, say which one you mean "
+        "or ask which. Do not search again.\n\nYour answer:"
+    )
+    return gemini_gateway.generate(
+        "chat_reply", followup, user_id=user_id, temperature=0.4, max_output_tokens=4096,
+    ).strip()
+
+
 def generate_reply(advisor_prompt: str, user_id: str, user_msg: str) -> str:
     """Generate a reply for the history-based chat flow through the Gemini gateway,
     so web chat and WhatsApp share the per-user hourly limit and the circuit breaker.
     Raises GeminiGatewayError when the call is refused or fails."""
-    prompt = f"{advisor_prompt}\n\nUser question: {user_msg}\n\nYour answer:"
-    text = gemini_gateway.generate(
-        "chat_reply", prompt, user_id=user_id, temperature=0.4, max_output_tokens=4096,
-    )
-    return text.strip() or "I'm not sure how to answer that yet."
+    prompt = f"{advisor_prompt}{_memory_block(user_id, user_msg)}\n\nUser question: {user_msg}\n\nYour answer:"
+    return _generate_with_lookup(prompt, user_id) or "I'm not sure how to answer that yet."
 
 
 def build_financial_snapshot(user_id: str) -> str:
@@ -570,10 +627,9 @@ def handle_chat_turn(user_id: str, message: str, chat_id: str = None, channel: s
         persona = _ADVISOR_PERSONA + "\n" + _PRIORITY_RULES + (_WHATSAPP_FORMAT_RULES if channel == "whatsapp" else "")
         history_block = (f"\n\n=== RECENT CONVERSATION (all channels, oldest first) ===\n{history_text}"
                          if history_text else "")
-        prompt = f"{persona}\n\n{context_text}{history_block}\n\nUser question: {message}\n\nYour answer:"
-        reply = gemini_gateway.generate(
-            "chat_reply", prompt, user_id=user_id, temperature=0.4, max_output_tokens=4096,
-        ).strip() or "I'm not sure how to answer that yet."
+        prompt = (f"{persona}\n\n{context_text}{_memory_block(user_id, message)}{history_block}"
+                  f"\n\nUser question: {message}\n\nYour answer:")
+        reply = _generate_with_lookup(prompt, user_id) or "I'm not sure how to answer that yet."
     except Exception as e:
         print(f"[chat_service] Gemini call failed: {e}")
         return gemini_gateway.user_message(e)

@@ -345,6 +345,22 @@ def update_transaction_category(tx_id: str, category: str) -> dict:
         return _err(e)
 
 
+def merge_transaction_metadata(tx_id: str, fields: dict) -> dict:
+    """Add keys to a transaction's metadata without losing what is already there."""
+    try:
+        row = supabase.table("transactions").select("metadata").eq("id", tx_id).limit(1).execute()
+        if not row.data:
+            return _err("transaction not found")
+        meta = row.data[0].get("metadata") or {}
+        if not isinstance(meta, dict):
+            meta = {}
+        meta.update({k: v for k, v in fields.items() if v not in (None, "")})
+        res = supabase.table("transactions").update({"metadata": meta}).eq("id", tx_id).execute()
+        return _ok(res.data)
+    except Exception as e:
+        return _err(e)
+
+
 def delete_transaction(tx_id: str) -> dict:
     try:
         res = supabase.table("transactions").delete().eq("id", tx_id).execute()
@@ -819,6 +835,7 @@ def get_gmail_financial_context(user_id: str, limit: int = 30) -> dict:
                 "original_currency": "NGN",
                 "channel": "bank_email",
                 "channel_label": channel_label("bank_email"),
+                "user_words": a.get("user_words"),
             })
 
         return _ok({

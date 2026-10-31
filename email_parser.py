@@ -56,18 +56,79 @@ def find_vendor_memory(user_id, vendor_key):
     return found["ids"][0], found["metadatas"][0] or {}
 
 
+CONSISTENCY_MIN_OBSERVATIONS = 2
+CONSISTENCY_MIN_SHARE = 0.8
+
+_TRANSFER_MARKER_RE = re.compile(r"\b(trf|nip|fip|transfer|mobile|instant|ussd)\b", re.IGNORECASE)
+_BUSINESS_NAME_RE = re.compile(
+    r"\b(ltd|limited|plc|enterprises?|ventures?|stores?|store|mart|supermarket|shop|services?|"
+    r"stationers?|pharmacy|hotel|restaurant|bank|pos|web|airtime|data|ads|google|meta|facebook|"
+    r"netflix|apple|amazon|uber|bolt|dstv|gotv|mtn|airtel|glo|ikedc|ekedc|nepa)\b",
+    re.IGNORECASE,
+)
+
+
+def looks_like_person_transfer(narration, vendor="") -> bool:
+    """True for a bank transfer to a named individual. Such a counterparty can be
+    boots today and rent next month, so it can suggest a category but never become a rule."""
+    text = f"{narration or ''} {vendor or ''}"
+    return bool(_TRANSFER_MARKER_RE.search(str(narration or ""))) and not _BUSINESS_NAME_RE.search(text)
+
+
+def _category_counts(meta) -> dict:
+    """How often this user filed the vendor under each category. Rows saved before
+    history tracking count their one answer once, so they must be confirmed again."""
+    try:
+        counts = json.loads((meta or {}).get("category_counts_json") or "{}")
+    except (TypeError, ValueError):
+        counts = {}
+    if not counts and (meta or {}).get("category"):
+        counts = {meta["category"]: 1}
+    return {k: int(v) for k, v in counts.items() if isinstance(v, (int, float))}
+
+
+def vendor_history(user_id, vendor_key):
+    """(top_category, share, observations) from this user's own answers, or None."""
+    known = find_vendor_memory(user_id, vendor_key)
+    counts = _category_counts(known[1]) if known else {}
+    total = sum(counts.values())
+    if not total:
+        return None
+    top = max(counts, key=counts.get)
+    return top, counts[top] / total, total
+
+
+def trusted_category(user_id, vendor_key, narration=None, vendor=""):
+    """The category Loamy may apply WITHOUT asking: the user's history for this vendor
+    must be highly consistent, and the counterparty must not be a person."""
+    if looks_like_person_transfer(narration, vendor):
+        return None
+    history = vendor_history(user_id, vendor_key)
+    if not history:
+        return None
+    category, share, total = history
+    if total >= CONSISTENCY_MIN_OBSERVATIONS and share >= CONSISTENCY_MIN_SHARE:
+        return category
+    return None
+
+
 def save_vendor_memory(user_id, vendor, vendor_key, category):
-    """Remember a vendor->category rule for one user. The document id includes the
-    user, so two users can never overwrite each other's rule for the same vendor."""
+    """Record one more answer for a vendor. Keeps a per-category history instead of a
+    single hard rule. The document id includes the user, so two users can never
+    overwrite each other's history for the same vendor."""
     if not user_id or not vendor_key:
         return
     doc_id = f"vendor_{user_id}_{vendor_key}"
     existing = find_vendor_memory(user_id, vendor_key)
+    counts = _category_counts(existing[1] if existing else None)
+    counts[category] = counts.get(category, 0) + 1
+    top = max(counts, key=lambda c: (counts[c], c == category))
     metadata = {
         "user_id": str(user_id),
         "vendor_key": vendor_key,
         "vendor": vendor,
-        "category": category,
+        "category": top,
+        "category_counts_json": json.dumps(counts),
         "updated_at": datetime.now().isoformat(),
     }
     if existing:
@@ -162,8 +223,9 @@ def stage_review_item(user_id, user_name, source_id, narration, amount, tx_type,
     if review_queue_collection.get(where={"source_id": source_id})["ids"]:
         return "exists", None
 
-    known = find_vendor_memory(user_id, vendor_key)
-    remembered = known[1].get("category") if known else None
+    remembered = trusted_category(user_id, vendor_key, narration, vendor_name)
+    history = vendor_history(user_id, vendor_key)
+    suggestion = history[0] if history and not remembered else ""
     base_meta = {
         "user_id": user_id,
         "vendor": vendor_name,
@@ -195,9 +257,11 @@ def stage_review_item(user_id, user_name, source_id, narration, amount, tx_type,
         metadatas=[{
             **base_meta,
             "status": "pending",
-            "nudge": _build_nudge_message(user_name, vendor_name, amount, tx_type),
+            "nudge": _build_nudge_message(user_name, vendor_name, amount, tx_type)
+                     + (f" Last time you filed {vendor_name} under {suggestion}. Is it the same?" if suggestion else ""),
             "user_reply": "",
             "category": "",
+            "suggested_category": suggestion,
         }],
     )
     return "queued", None
