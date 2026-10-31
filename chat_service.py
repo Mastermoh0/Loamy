@@ -1156,6 +1156,20 @@ async def chat_with_history(query: dict):
             except Exception as e:
                 print(f"Goal update detection failed: {e}")
 
+        # Rates let the advisor convert a ₦ transaction into another currency
+        # (e.g. "how much was it in rupees?") instead of refusing.
+        rates_context = "Exchange rates unavailable right now."
+        try:
+            rate_lines = []
+            for code, label in (("MUR", "Mauritian Rupee"), ("USD", "US Dollar"), ("GBP", "British Pound"), ("EUR", "Euro")):
+                rate = await asyncio.to_thread(get_exchange_rate, code, "NGN")
+                if rate:
+                    rate_lines.append(f"- 1 {code} ({label}) = ₦{rate:,.2f}  |  ₦1 = {1 / rate:,.4f} {code}")
+            if rate_lines:
+                rates_context = "\n        ".join(rate_lines)
+        except Exception as e:
+            print(f"[CHAT-RATES] could not load exchange rates: {e}")
+
         # 6. Final Advisor Response (Grounded in History + Goals + Accounts + Context)
         advisor_prompt = f"""
         You are Loamy, the user's personal wealth manager: a warm, sharp financial advisor who
@@ -1178,6 +1192,13 @@ async def chat_with_history(query: dict):
         {history_context}
         
         {gmail_context}
+        
+        === EXCHANGE RATES (use for any currency conversion question) ===
+        {rates_context}
+        CURRENCY QUESTIONS: Amounts are stored in ₦. When the user asks for an amount in another
+        currency (rupees, dollars, ...), convert the ₦ figure with the rate above, show the
+        calculation briefly, and note it is an approximate rate. Never say you can only give Naira.
+        "it" means the transaction most recently discussed in the conversation history.
         
         === CONVERSATION HISTORY (READ THIS CAREFULLY) ===
         {recent_chat_context}
