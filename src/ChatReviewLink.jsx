@@ -9,7 +9,7 @@ const REFRESH_MS = 60_000;
 // Sidebar link to the Review Queue with a live count of items still needing a
 // category. `refreshKey` lets the chat page re-check the count after each reply,
 // since the chat can resolve queue items on its own.
-export default function ChatReviewLink({ userId, refreshKey }) {
+export default function ChatReviewLink({ userId, refreshKey, collapsed = false }) {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
@@ -31,7 +31,7 @@ export default function ChatReviewLink({ userId, refreshKey }) {
   const label = count > 0 ? `Review Queue, ${count} item${count === 1 ? "" : "s"} to review` : "Review Queue";
 
   return (
-    <Link to="/review-queue" className="menu-item" aria-label={label}>
+    <Link to="/review-queue" className="menu-item" aria-label={label} title={collapsed ? label : undefined}>
       <FontAwesomeIcon icon={faListCheck} />
       <span>Review Queue</span>
       {count > 0 && (

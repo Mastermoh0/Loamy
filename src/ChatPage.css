@@ -10,15 +10,18 @@
 /* Sidebar */
 .chat-sidebar {
     width: 280px;
+    flex-shrink: 0;
+    overflow: hidden;
     background-color: #fff;
     border-right: 1px solid rgba(0, 0, 0, 0.08);
     display: flex;
     flex-direction: column;
     height: 100vh;
+    transition: width 0.25s ease;
 }
 
 .sidebar-top {
-    padding: 20px;
+    padding: 20px 16px;
     border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
 
@@ -27,6 +30,40 @@
     align-items: center;
     gap: 10px;
     margin-bottom: 20px;
+}
+
+.logo-text {
+    flex: 1;
+    white-space: nowrap;
+    transition: opacity 0.15s ease;
+}
+
+.sidebar-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 12px;
+    background: none;
+    color: #555;
+    font-size: 17px;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.sidebar-toggle:hover {
+    background-color: rgba(34, 90, 36, 0.1);
+    color: #225a24;
+}
+
+.sidebar-toggle:focus-visible,
+.menu-item:focus-visible,
+.new-chat-btn:focus-visible {
+    outline: 2px solid #225a24;
+    outline-offset: 2px;
 }
 
 .sidebar-logo {
@@ -81,10 +118,12 @@
 }
 
 .menu-item {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 10px 12px;
+    padding: 10px 11px;
+    white-space: nowrap;
     border-radius: 10px;
     cursor: pointer;
     transition: background-color 0.2s;
@@ -100,7 +139,13 @@
 .menu-item svg {
     width: 18px;
     height: 18px;
+    flex-shrink: 0;
     color: #555;
+}
+
+.menu-item span:not(.menu-item-badge),
+.new-chat-btn span {
+    transition: opacity 0.15s ease;
 }
 
 .menu-item-badge {
@@ -218,9 +263,12 @@
     gap: 12px;
     padding: 12px;
     margin-top: 8px;
+    white-space: nowrap;
+    transition: padding 0.25s ease;
 }
 
 .avatar {
+    flex-shrink: 0;
     width: 36px;
     height: 36px;
     background-color: #225a24;
@@ -674,6 +722,68 @@
     display: none;
 }
 
+/* Desktop: sidebar collapses to an icon rail */
+@media (min-width: 769px) {
+    .chat-sidebar.collapsed {
+        width: 73px;
+    }
+
+    .chat-sidebar.collapsed .logo-section {
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+
+    .chat-sidebar.collapsed .logo-text {
+        display: none;
+    }
+
+    .chat-sidebar.collapsed .new-chat-btn {
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        border-radius: 12px;
+    }
+
+    .chat-sidebar.collapsed .new-chat-btn span,
+    .chat-sidebar.collapsed .menu-item span:not(.menu-item-badge),
+    .chat-sidebar.collapsed .user-profile span {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .chat-sidebar.collapsed .section-label {
+        display: none;
+    }
+
+    .chat-sidebar.collapsed .chat-history-section {
+        visibility: hidden;
+        opacity: 0;
+    }
+
+    .chat-sidebar.collapsed .menu-item-badge {
+        position: absolute;
+        top: 2px;
+        left: 22px;
+        min-width: 16px;
+        padding: 0 4px;
+        font-size: 10px;
+        line-height: 16px;
+        margin-left: 0;
+    }
+
+    .chat-sidebar.collapsed .user-profile {
+        padding: 12px 2px;
+    }
+}
+
+@media (max-width: 768px) {
+    /* The drawer closes via its backdrop, so the rail toggle isn't needed */
+    .sidebar-toggle {
+        display: none;
+    }
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     /* dvh keeps the composer above the browser toolbar on phones */
@@ -810,7 +920,11 @@
 
 @media (prefers-reduced-motion: reduce) {
     .chat-sidebar,
-    .chat-drawer-backdrop {
+    .chat-drawer-backdrop,
+    .logo-text,
+    .user-profile,
+    .menu-item span,
+    .new-chat-btn span {
         transition: none;
     }
 }
