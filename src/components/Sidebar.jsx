@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChartPie, faComment, faFileInvoiceDollar, faListCheck, faBuildingColumns } from "@fortawesome/free-solid-svg-icons";
+import { faChartPie, faComment, faFileInvoiceDollar, faListCheck, faBuildingColumns, faGear } from "@fortawesome/free-solid-svg-icons";
 import "./Sidebar.css";
 
 const links = [
@@ -9,6 +9,7 @@ const links = [
   ["/invoices", "Invoices", faFileInvoiceDollar],
   ["/accounts", "Bank Accounts", faBuildingColumns],
   ["/review-queue", "Review Queue", faListCheck],
+  ["/settings", "Settings", faGear],
 ];
 
 export default function Sidebar() {

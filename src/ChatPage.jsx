@@ -687,10 +687,10 @@ const createNewChat = async (title) => {
                 </div>
 
                 <div className="sidebar-bottom">
-                    <div className="menu-item">
+                    <Link to="/settings" className="menu-item">
                         <FontAwesomeIcon icon={faGear} />
                         <span>Settings</span>
-                    </div>
+                    </Link>
                     <div className="menu-item logout-btn" onClick={handleLogout}>
                         <FontAwesomeIcon icon={faRightFromBracket} />
                         <span>Logout</span>

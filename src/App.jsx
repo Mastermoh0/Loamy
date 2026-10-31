@@ -9,6 +9,7 @@ import GmailConnectPage from "./GmailConnectPage.jsx";
 import InvoicesPage from "./InvoicesPage.jsx";
 import ReviewQueuePage from "./ReviewQueuePage.jsx";
 import OnboardingWizard from "./OnboardingWizard.jsx";
+import SettingsPage from "./SettingsPage.jsx";
 import AccountDetail from "./pages/AccountDetail.jsx";
 import AllAccountsOverview from "./pages/AllAccountsOverview.jsx";
 
@@ -37,6 +38,7 @@ export default function App() {
       <Route path="/gmail-connect" element={<GmailConnectPage />} />
       <Route path="/invoices" element={<InvoicesPage />} />
       <Route path="/review-queue" element={<ReviewQueuePage />} />
+      <Route path="/settings" element={<SettingsPage />} />
       <Route path="/accounts" element={<AllAccountsOverview />} />
       <Route path="/accounts/:accountId" element={<AccountDetail />} />
 
