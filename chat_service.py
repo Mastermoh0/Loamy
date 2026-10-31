@@ -70,6 +70,13 @@ Rules:
   than naira (e.g. "I spent 350 MUR in cash"), that spend is logged to their ledger in the
   currency they stated. Never say you cannot track cash or foreign-currency spending.
   If the amount, currency or purpose is unclear, ask one short question.
+- TRANSACTION DETAILS: Each ledger line carries its own record: the ₦ amount, the original
+  amount and currency with the rate used, the channel it was logged through, when it was
+  logged, and the user's own words about it. Answer questions about a specific transaction
+  (how much in another currency, where or when it was logged, what it was for) from those
+  fields. Words like "it" or "that" refer to the transaction most recently discussed in
+  RECENT CONVERSATION, so resolve them from there instead of asking. Ledger amounts are
+  stored in ₦; never claim you can only track Naira.
 - RECENT CONVERSATION covers every channel (WhatsApp and the web app). Treat it as one
   continuous conversation: if the user logged something on WhatsApp, you know about it here.
 """
@@ -655,14 +662,7 @@ async def chat_with_history(query: dict):
             if t.get("source") in ("receipt", "manual_cash")
         ]
 
-        spending_entries = []
-        for t in ledger_only_entries:
-            amt = t.get("amount", 0) or 0
-            cur = t.get("currency") or "NGN"
-            symbol = "₦" if cur == "NGN" else cur + " "
-            spending_entries.append(
-                f"- {t.get('date')}: {t.get('vendor')} - {symbol}{amt:,.2f} ({t.get('category')})"
-            )
+        spending_entries = [_format_transaction_line(t).strip() for t in ledger_only_entries]
 
         # Build comprehensive spending context. The SPENDING SUMMARY figures are
         # authoritative (combine receipts + bank alerts) - the AI should quote
