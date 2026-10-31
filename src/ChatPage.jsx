@@ -6,8 +6,9 @@ import {
     faRightFromBracket, faArrowUp, faPaperclip, faEnvelope,
     faCoffee, faLaptop, faCartShopping, faCalculator,
     faEllipsis, faPen, faTrash, faCheck, faFileInvoiceDollar, faBuildingColumns,
-    faFilePdf, faFileWord, faFileExcel, faFileImage, faFileLines, faBars
+    faFilePdf, faFileWord, faFileExcel, faFileImage, faFileLines, faBars, faTableColumns
 } from "@fortawesome/free-solid-svg-icons";
+import useSidebarCollapsed from "./hooks/useSidebarCollapsed";
 import Logo from "./assets/LoamyLogo.png";
 import ReviewQueue from "./ReviewQueue.jsx";
 import ChatReviewLink from "./ChatReviewLink.jsx";
@@ -75,6 +76,8 @@ const ChatPage = () => {
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     // Phones: the sidebar becomes a slide-in drawer opened from the header.
     const [drawerOpen, setDrawerOpen] = useState(false);
+    // Desktop: the sidebar collapses to an icon rail (Gemini style).
+    const [collapsed, toggleCollapsed] = useSidebarCollapsed();
 
     // Close the drawer after any navigation-style tap inside it (new chat, a
     // chat, a link) but not when opening a chat's rename/delete menu.
@@ -609,15 +612,31 @@ const createNewChat = async (title) => {
             />
             <aside
                 id="chat-sidebar"
-                className={`chat-sidebar${drawerOpen ? " open" : ""}`}
+                className={`chat-sidebar${drawerOpen ? " open" : ""}${collapsed ? " collapsed" : ""}`}
                 onClick={handleDrawerTap}
             >
                 <div className="sidebar-top">
                     <div className="logo-section">
                         <img src={Logo} alt="Loamy" className="sidebar-logo" />
                         <span className="logo-text">Loamy</span>
+                        <button
+                            type="button"
+                            className="sidebar-toggle"
+                            onClick={toggleCollapsed}
+                            aria-label={collapsed ? "Open sidebar" : "Close sidebar"}
+                            aria-expanded={!collapsed}
+                            aria-controls="chat-sidebar"
+                            title={collapsed ? "Open sidebar (Ctrl+B)" : "Close sidebar (Ctrl+B)"}
+                        >
+                            <FontAwesomeIcon icon={faTableColumns} />
+                        </button>
                     </div>
-                    <button className="new-chat-btn" onClick={startNewChat}>
+                    <button
+                        className="new-chat-btn"
+                        onClick={startNewChat}
+                        aria-label="New chat"
+                        title={collapsed ? "New chat" : undefined}
+                    >
                         <FontAwesomeIcon icon={faPlus} />
                         <span>New Chat</span>
                     </button>
@@ -626,25 +645,26 @@ const createNewChat = async (title) => {
                 <div className="sidebar-menu">
                     <div className="menu-section">
                         <p className="section-label">Tools</p>
-                        <Link to="/spending" className="menu-item">
+                        <Link to="/spending" className="menu-item" title={collapsed ? "Spending Analysis" : undefined}>
                             <FontAwesomeIcon icon={faChartPie} />
                             <span>Spending Analysis</span>
                         </Link>
-                        <Link to="/invoices" className="menu-item">
+                        <Link to="/invoices" className="menu-item" title={collapsed ? "Invoices" : undefined}>
                             <FontAwesomeIcon icon={faFileInvoiceDollar} />
                             <span>Invoices</span>
                         </Link>
-                        <Link to="/accounts" className="menu-item">
+                        <Link to="/accounts" className="menu-item" title={collapsed ? "Bank Accounts" : undefined}>
                             <FontAwesomeIcon icon={faBuildingColumns} />
                             <span>Bank Accounts</span>
                         </Link>
                         <ChatReviewLink
                             userId={currentUser?.id || currentUser?.user_id || "default"}
                             refreshKey={messages.length}
+                            collapsed={collapsed}
                         />
                     </div>
 
-                    <div className="menu-section">
+                    <div className="menu-section chat-history-section">
                         <p className="section-label">Your Chats</p>
                         <div className="chat-list">
                             {chatsLoading ? (
@@ -705,16 +725,28 @@ const createNewChat = async (title) => {
                 </div>
 
                 <div className="sidebar-bottom">
-                    <Link to="/settings" className="menu-item">
+                    <Link to="/settings" className="menu-item" title={collapsed ? "Settings" : undefined}>
                         <FontAwesomeIcon icon={faGear} />
                         <span>Settings</span>
                     </Link>
-                    <div className="menu-item logout-btn" onClick={handleLogout}>
+                    <div
+                        className="menu-item logout-btn"
+                        onClick={handleLogout}
+                        role="button"
+                        tabIndex={0}
+                        title={collapsed ? "Logout" : undefined}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                handleLogout();
+                            }
+                        }}
+                    >
                         <FontAwesomeIcon icon={faRightFromBracket} />
                         <span>Logout</span>
                     </div>
                     {currentUser && (
-                        <div className="user-profile">
+                        <div className="user-profile" title={collapsed ? currentUser.name || "User" : undefined}>
                             <div className="avatar">{currentUser.name?.charAt(0).toUpperCase() || "U"}</div>
                             <span>{currentUser.name || "User"}</span>
                         </div>
