@@ -41,7 +41,32 @@ if SUPABASE_KEY.startswith("sb_publishable_") or SUPABASE_KEY.startswith("eyJ") 
     print("[Database] WARNING: this looks like a PUBLISHABLE/anon key. RLS will "
           "block backend writes. Use SUPABASE_SERVICE_ROLE_KEY (the secret key).")
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+def _build_supabase_client() -> Client:
+    """One client is shared by every request thread. httpx HTTP/2 multiplexes all
+    calls over a single socket, which intermittently fails with
+    "[Errno 11] Resource temporarily unavailable" when threads overlap. HTTP/1.1
+    gives each thread its own pooled connection, and transport retries absorb the
+    occasional dropped keep-alive connection."""
+    try:
+        import httpx
+        try:
+            from supabase.lib.client_options import SyncClientOptions as _Options
+        except ImportError:
+            from supabase.lib.client_options import ClientOptions as _Options
+
+        http_client = httpx.Client(
+            http2=False,
+            transport=httpx.HTTPTransport(retries=3),
+            timeout=httpx.Timeout(30.0, connect=10.0),
+            limits=httpx.Limits(max_connections=50, max_keepalive_connections=20),
+        )
+        return create_client(SUPABASE_URL, SUPABASE_KEY, options=_Options(httpx_client=http_client))
+    except Exception as e:
+        print(f"[Database] Falling back to the default Supabase client: {e}")
+        return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+
+supabase: Client = _build_supabase_client()
 
 
 # ============================================
