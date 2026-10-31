@@ -185,3 +185,17 @@
   }
   .settings-detail { padding: 22px 20px; }
 }
+
+@media (max-width: 768px) {
+  .settings-page .invoices-main {
+    width: 100%;
+    padding: calc(22px + env(safe-area-inset-top)) 16px 24px;
+  }
+  .settings-header h1 { font-size: 1.5rem; }
+  .settings-header p { display: none; }
+  .settings-header { margin-bottom: 16px; }
+  .settings-row { min-height: 56px; padding: 14px 18px; }
+  .settings-back { min-height: 44px; }
+  .settings-modal-actions { flex-direction: column-reverse; }
+  .settings-btn-ghost, .settings-btn-danger { width: 100%; min-height: 46px; }
+}
