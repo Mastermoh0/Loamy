@@ -808,16 +808,18 @@ def get_gmail_financial_context(user_id: str, limit: int = 30) -> dict:
         # so "Internal Transfer" is honored here exactly as on every other screen.
         import categorizer
         try:
-            from business_logic import _review_category_overrides
-            overrides = _review_category_overrides(user_id)
+            from business_logic import _review_resolutions
+            overrides, notes = _review_resolutions(user_id)
         except Exception as e:
             print(f"[Database] category overrides unavailable: {e}")
-            overrides = {}
+            overrides, notes = {}, {}
         for a in alerts:
             narration = a.get("narration") or a.get("subject") or "Transaction"
             sid = a.get("id") or f"{str(narration).lower()[:20]}_{float(a.get('amount') or 0)}"
             if overrides.get(sid):
                 a["category"] = overrides[sid]
+            if notes.get(sid):
+                a["user_words"] = notes[sid]
 
         total_credits = total_debits = internal_transfers = 0.0
         by_category: dict[str, float] = {}
