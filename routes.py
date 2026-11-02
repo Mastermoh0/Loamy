@@ -29,6 +29,7 @@ import transfers
 import transfers as transfers_module
 import review_actions
 import chat_service
+from fee_terms import is_bank_fee
 from models import (
     collection,
     goals_collection,
@@ -679,7 +680,7 @@ async def get_dashboard_data(user_id: str = "default"):
                         has_no_category = not category or category.lower() in ['other', 'uncategorized', 'banking', '']
                         # Skip pure bank fees/charges - those don't need user clarification
                         # 'fip' is a NIBSS transfer-reference prefix, NOT a fee - do not filter it.
-                        is_not_fee = all(kw not in narration_lower for kw in ['charge', 'fee', 'stamp duty', 'vat', 'levy', 'commission', 'cot', 'maintenance'])
+                        is_not_fee = not is_bank_fee(narration_lower)
                         this_type = tx_type or 'debit'
 
                         # Already handled in the Review Queue (resolved or dismissed)?

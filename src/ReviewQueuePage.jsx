@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faChartPie, faComment, faFileInvoiceDollar,
-  faListCheck, faCheckCircle, faBuildingColumns
+  faListCheck, faCheckCircle, faBuildingColumns, faGear
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchReviewQueue,
@@ -345,6 +345,10 @@ const ReviewQueuePage = () => {
               <FontAwesomeIcon icon={faListCheck} />
               <span>Review Queue</span>
               {count > 0 && <span className="menu-badge">{count}</span>}
+            </Link>
+            <Link to="/settings" className="menu-item">
+              <FontAwesomeIcon icon={faGear} />
+              <span>Settings</span>
             </Link>
           </div>
         </div>

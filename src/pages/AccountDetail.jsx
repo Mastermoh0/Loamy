@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faChartPie, faComment, faFileInvoiceDollar, faListCheck,
-  faArrowLeft, faArrowDown, faArrowUp, faBuildingColumns, faPlus,
+  faArrowLeft, faArrowDown, faArrowUp, faBuildingColumns, faPlus, faGear,
 } from "@fortawesome/free-solid-svg-icons";
 import ConnectBankModal from "../components/ConnectBankModal.jsx";
 import BankLogo from "../components/BankLogo.jsx";
@@ -97,6 +97,10 @@ export default function AccountDetail() {
             <Link to="/review-queue" className="menu-item">
               <FontAwesomeIcon icon={faListCheck} />
               <span>Review Queue</span>
+            </Link>
+            <Link to="/settings" className="menu-item">
+              <FontAwesomeIcon icon={faGear} />
+              <span>Settings</span>
             </Link>
           </div>
         </div>
