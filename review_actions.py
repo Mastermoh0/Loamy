@@ -201,10 +201,10 @@ def resolve_item(review_id: str, reply: str = "", category: str = "", history=No
         transfers.stage_as_transfer(review_id, meta, reply)
         return _file_as_transfer(review_id, meta, reply)
 
-    meta.update({"status": "resolved", "user_reply": reply, "category": category,
+    note = " | ".join([*(h for h in (history or []) if h), reply])
+    meta.update({"status": "resolved", "user_reply": reply, "user_note": note[:500], "category": category,
                  "resolved_at": datetime.now().isoformat()})
     review_queue_collection.update(ids=[review_id], metadatas=[meta])
-    note = " | ".join([*(h for h in (history or []) if h), reply])
     _tag_source_transaction(meta, category, note)
     _remember_vendor(meta, category)
     _remember_context(meta, note, fact)

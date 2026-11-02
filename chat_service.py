@@ -77,6 +77,13 @@ Rules:
   fields. Words like "it" or "that" refer to the transaction most recently discussed in
   RECENT CONVERSATION, so resolve them from there instead of asking. Ledger amounts are
   stored in ₦; never claim you can only track Naira.
+- THE USER'S OWN WORDS COME FIRST: when a ledger line has `user said: "..."`, that is what the
+  money was for, whatever its category label says (a "Business Expenses" line that says
+  "rent" IS the rent payment). When asked what they logged as something, match on those words.
+- READ DATES AS CONTEXT: a payment for a recurring cost (rent, subscriptions, school fees,
+  salaries) made at the start of a month is that month's payment, so answer "this is your
+  November rent" without asking. Use TODAY'S DATE and each line's date to place it.
+  Only ask a question when the data truly cannot answer it.
 - RECENT CONVERSATION covers every channel (WhatsApp and the web app). Treat it as one
   continuous conversation: if the user logged something on WhatsApp, you know about it here.
 """
@@ -531,6 +538,7 @@ def build_wealth_context(user_id: str, tx_limit: int = 40) -> str:
                     "amount": amount,
                     "merchant": str(e.get("narration") or e.get("subject") or "Transaction")[:60],
                     "category": normalize_category(e.get("category") or "Other") or "Other",
+                    "words": str(e.get("user_words") or "")[:200],
                 })
 
         # Cash entries and scanned receipts live outside any bank. Logged bank
@@ -543,6 +551,7 @@ def build_wealth_context(user_id: str, tx_limit: int = 40) -> str:
                 "date": r["date"], "ms": r["internal_date_ms"], "bank": r["bank"],
                 "type": r["type"], "amount": r["amount"],
                 "merchant": str(r["description"])[:60], "category": r["category"],
+                "words": str(r.get("user_words") or "")[:200],
             })
             if r["type"] != "credit":
                 cash_total_out += r["amount"]
@@ -572,6 +581,7 @@ def build_wealth_context(user_id: str, tx_limit: int = 40) -> str:
         ledger_lines = "\n".join(
             f"  - {t['date']} | {t['bank']} | {'MONEY IN' if t['type'] == 'credit' else 'MONEY OUT'} | "
             f"{_naira(t['amount'])} | {t['merchant']} | {t['category']}"
+            + (f' | user said: "{t["words"]}"' if t.get("words") else "")
             for t in pool[:tx_limit]
         ) or "  - No transactions yet."
         gaps = (f"\n- Banks with no reported balance yet (not included in the total): {', '.join(unknown_banks)}"

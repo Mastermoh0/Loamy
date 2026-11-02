@@ -536,38 +536,66 @@ def process_receipt_image(file_data, content_type, user_id="default"):
 
 # ========== SHARED FINANCIAL SNAPSHOT (single source of truth) ==========
 
-def _review_category_overrides(user_id: str) -> dict:
-    """{source_id: category} for every Review Queue item the user has resolved,
-    whether from the queue itself or by telling the chat."""
+_SYSTEM_REPLY_PREFIXES = ("auto-", "categorized in chat")
+
+
+def _review_resolutions(user_id: str) -> tuple:
+    """({source_id: category}, {source_id: note}) for every Review Queue item the
+    user has resolved, whether from the queue itself or by telling the chat.
+
+    The note is what the user actually said about the transaction ("rent for
+    November"). System-written replies and bare category taps are not notes."""
     try:
         rq = review_queue_collection.get(where={"user_id": user_id})
     except Exception as e:
         print(f"[v0] review category overrides unavailable: {e}")
-        return {}
-    overrides = {}
+        return {}, {}
+    categories, notes = {}, {}
     for meta in rq.get("metadatas") or []:
         meta = meta or {}
-        if meta.get("status") == "resolved" and meta.get("source_id") and meta.get("category"):
-            overrides[meta["source_id"]] = meta["category"]
-    return overrides
+        sid = meta.get("source_id")
+        if meta.get("status") != "resolved" or not sid:
+            continue
+        category = meta.get("category")
+        if category:
+            categories[sid] = category
+        note = str(meta.get("user_note") or meta.get("user_reply") or "").strip()
+        is_system = note.lower().startswith(_SYSTEM_REPLY_PREFIXES)
+        if note and not is_system and note.lower() != str(category or "").lower():
+            notes[sid] = note[:500]
+    return categories, notes
+
+
+def _review_category_overrides(user_id: str) -> dict:
+    """{source_id: category} for every Review Queue item the user has resolved."""
+    return _review_resolutions(user_id)[0]
+
+
+def _review_note_overrides(user_id: str) -> dict:
+    """{source_id: what the user said} for every resolved Review Queue item."""
+    return _review_resolutions(user_id)[1]
 
 
 def load_user_emails(user_id: str) -> list:
-    """Synced emails with the user's own categories applied on top.
+    """Synced emails with the user's own categories and words applied on top.
 
-    The Review Queue is the source of truth for categories the user chose, so
+    The Review Queue is the source of truth for what the user chose and said, so
     every screen and the chat read the same answer."""
     emails = _load_user_emails_raw(user_id)
-    overrides = _review_category_overrides(user_id)
-    if not overrides:
+    overrides, notes = _review_resolutions(user_id)
+    if not overrides and not notes:
         return emails
     result = []
     for email in emails:
         narration = (email.get("narration") or email.get("subject") or "Transaction")
         amount = float(email.get("amount") or 0)
         sid = email.get("id") or f"{narration.lower()[:20]}_{amount}"
-        category = overrides.get(sid)
-        result.append({**email, "category": category} if category else email)
+        patch = {}
+        if overrides.get(sid):
+            patch["category"] = overrides[sid]
+        if notes.get(sid):
+            patch["user_words"] = notes[sid]
+        result.append({**email, **patch} if patch else email)
     return result
 
 
@@ -767,7 +795,7 @@ def compute_bank_snapshot(user_id: str) -> dict:
 def format_snapshot_for_ai(snap: dict) -> str:
     """Render the shared snapshot as prompt-ready text for Gemini."""
     cats = "\n".join(
-        f"  - {c}: ₦{a:,.2f}" for c, a in snap.get("spending_by_category", {}).items()
+        f"  - {c}: ��{a:,.2f}" for c, a in snap.get("spending_by_category", {}).items()
     ) or "  - No categorized spending yet."
     txns = "\n".join(
         f"  - {t['date']}: {t['bank']} {t['type'].upper()} ₦{t['amount']:,.2f} | {t['narration'][:40]}"
@@ -823,6 +851,7 @@ def load_ledger_transactions(user_id: str) -> list:
             "bank": LEDGER_SOURCE_LABELS.get(source, "Ledger"),
             "category": categorizer.coerce_category(r.get("category")),
             "source": source,
+            "user_words": (r.get("metadata") or {}).get("user_words") if isinstance(r.get("metadata"), dict) else None,
         })
     return rows
 
