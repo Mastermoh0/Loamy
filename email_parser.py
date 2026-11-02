@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 import database
 import categorizer
 import gemini_gateway
+from fee_terms import is_bank_fee
 from business_logic import (
     compute_bank_snapshot,
     load_ledger_transactions,
@@ -363,8 +364,7 @@ def _scan_bank_emails_for_review(user_id="default", user_name="there", force=Fal
         has_no_category = not category or category.lower() in ['other', 'uncategorized', 'banking', '']
         # NOTE: 'fip' is a NIBSS transfer-reference prefix (e.g. "FIP:GTB/..."),
         # NOT a bank fee, so it must NOT be filtered out here.
-        is_not_fee = all(kw not in narration_lower for kw in
-                         ['charge', 'fee', 'stamp duty', 'vat', 'levy', 'commission', 'cot', 'maintenance'])
+        is_not_fee = not is_bank_fee(narration_lower)
         if not (has_no_category and is_not_fee):
             continue
 
