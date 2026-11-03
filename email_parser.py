@@ -16,6 +16,7 @@ import requests
 from datetime import datetime, timedelta
 
 import database
+import timezones
 import categorizer
 import gemini_gateway
 from fee_terms import is_bank_fee
@@ -1191,6 +1192,14 @@ def parse_gmail_message_full(msg_data, allowed_bank_slugs=None, user_id=None):
                 except Exception as e:
                     print(f"[Bank Balance] Could not update account balance: {e}")
 
+            # Prefer the transaction time printed in the alert body (bank clocks are
+            # Nigerian wall time). Fall back to when Gmail received the email,
+            # which is only an approximation, so time_known stays False.
+            occurred_at = timezones.to_utc_iso((registry_data or {}).get("date"), timezones.DEFAULT_TIMEZONE)
+            time_known = bool(occurred_at)
+            if not occurred_at:
+                occurred_at = timezones.epoch_ms_to_utc_iso(internal_date_ms)
+
             return {
                 "id": msg_data.get("id"),
                 "sender": sender,
@@ -1198,6 +1207,8 @@ def parse_gmail_message_full(msg_data, allowed_bank_slugs=None, user_id=None):
                 "subject": subject[:60] + "..." if len(subject) > 60 else subject,
                 "date": date_str,
                 "internal_date_ms": internal_date_ms,
+                "occurred_at": occurred_at,
+                "time_known": time_known,
                 "type": email_type,
                 "amount": bank_data.get("amount"),
                 "currency": bank_data.get("currency", "NGN"),
@@ -1232,6 +1243,8 @@ def parse_gmail_message_full(msg_data, allowed_bank_slugs=None, user_id=None):
                 "subject": subject[:60] + "..." if len(subject) > 60 else subject,
                 "date": date_str,
                 "internal_date_ms": internal_date_ms,
+                "occurred_at": timezones.epoch_ms_to_utc_iso(internal_date_ms),
+                "time_known": False,
                 "type": email_type,
                 "amount": amount,
                 "currency": currency,
@@ -2013,8 +2026,11 @@ def reparse_stored_bank_email(email: dict) -> dict:
     except Exception as e:
         print(f"[Reparse] {parser.__name__} failed for email {email.get('id')}: {e}")
         parsed = {}
+    body_instant = timezones.to_utc_iso(parsed.get("date"), timezones.DEFAULT_TIMEZONE)
     return {
         **email,
+        "occurred_at": body_instant or email.get("occurred_at") or timezones.epoch_ms_to_utc_iso(email.get("internal_date_ms")),
+        "time_known": bool(body_instant) or bool(email.get("time_known")),
         "amount": parsed.get("amount") if parsed.get("amount") is not None else email.get("amount"),
         "merchant": parsed.get("merchant") or email.get("merchant") or email.get("narration") or email.get("description"),
         "running_balance": parsed.get("balance") if parsed.get("balance") is not None else email.get("running_balance", email.get("balance")),

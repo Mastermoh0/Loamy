@@ -285,7 +285,8 @@ def add_transaction(user_id: str, tx_id: str, amount, **fields) -> dict:
     re-run of the same source can never duplicate a row (Ledger rule)."""
     known = {"vendor", "original_amount", "original_currency", "currency",
              "date", "category", "transaction_type", "source_id",
-             "is_estimate", "document", "source", "description"}
+             "is_estimate", "document", "source", "description",
+             "occurred_at", "time_known"}
     row = {"id": tx_id, "user_id": user_id, "amount": _to_money(amount)}
     extra_meta = {}
     for k, v in fields.items():
@@ -295,13 +296,31 @@ def add_transaction(user_id: str, tx_id: str, amount, **fields) -> dict:
             extra_meta[k] = v
     if "original_amount" in row and row["original_amount"] is not None:
         row["original_amount"] = _to_money(row["original_amount"])
+    if hasattr(row.get("occurred_at"), "isoformat"):
+        row["occurred_at"] = row["occurred_at"].isoformat()
     row["occurred_on"] = _parse_date(row.get("date"))
+    if row["occurred_on"] is None and row.get("occurred_at"):
+        moment = timezones.to_utc(row["occurred_at"])
+        if moment:
+            local = moment.astimezone(timezones.resolve_tz(get_user_timezone(user_id)))
+            row["occurred_on"] = local.date().isoformat()
     if extra_meta:
         row["metadata"] = extra_meta
     try:
         res = supabase.table("transactions").upsert(row, on_conflict="id").execute()
         return _ok(res.data)
     except Exception as e:
+        # Until scripts/add_transaction_occurred_at.sql is applied these columns
+        # don't exist; drop them so the write still lands (date-only, as before).
+        msg_first = str(e)
+        if "occurred_at" in msg_first or "time_known" in msg_first:
+            row.pop("occurred_at", None)
+            row.pop("time_known", None)
+            try:
+                res = supabase.table("transactions").upsert(row, on_conflict="id").execute()
+                return _ok(res.data)
+            except Exception as e_retry:
+                e = e_retry
         # Until scripts/sql/002_transactions_unified_source.sql is applied the
         # source/description columns don't exist; keep them in metadata instead
         # of losing the whole write.
