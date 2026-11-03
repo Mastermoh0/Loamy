@@ -13,6 +13,7 @@ import hashlib
 from datetime import datetime, timedelta
 
 import database
+import timezones
 import categorizer
 import gemini_gateway
 from models import (
@@ -492,6 +493,9 @@ def process_receipt_image(file_data, content_type, user_id="default"):
             original_currency=original_currency,
             currency="NGN",
             date=transaction_data['date'],
+            occurred_at=timezones.entry_instant_iso(
+                transaction_data['date'], database.get_user_timezone(user_id)),
+            time_known=False,
             category=category,
             transaction_type="expense",
             is_estimate=is_foreign_currency,  # True until a bank alert trues it up

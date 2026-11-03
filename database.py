@@ -285,7 +285,8 @@ def add_transaction(user_id: str, tx_id: str, amount, **fields) -> dict:
     re-run of the same source can never duplicate a row (Ledger rule)."""
     known = {"vendor", "original_amount", "original_currency", "currency",
              "date", "category", "transaction_type", "source_id",
-             "is_estimate", "document", "source", "description"}
+             "is_estimate", "document", "source", "description",
+             "occurred_at", "time_known"}
     row = {"id": tx_id, "user_id": user_id, "amount": _to_money(amount)}
     extra_meta = {}
     for k, v in fields.items():
@@ -295,13 +296,31 @@ def add_transaction(user_id: str, tx_id: str, amount, **fields) -> dict:
             extra_meta[k] = v
     if "original_amount" in row and row["original_amount"] is not None:
         row["original_amount"] = _to_money(row["original_amount"])
+    if hasattr(row.get("occurred_at"), "isoformat"):
+        row["occurred_at"] = row["occurred_at"].isoformat()
     row["occurred_on"] = _parse_date(row.get("date"))
+    if row["occurred_on"] is None and row.get("occurred_at"):
+        moment = timezones.to_utc(row["occurred_at"])
+        if moment:
+            local = moment.astimezone(timezones.resolve_tz(get_user_timezone(user_id)))
+            row["occurred_on"] = local.date().isoformat()
     if extra_meta:
         row["metadata"] = extra_meta
     try:
         res = supabase.table("transactions").upsert(row, on_conflict="id").execute()
         return _ok(res.data)
     except Exception as e:
+        # Until scripts/add_transaction_occurred_at.sql is applied these columns
+        # don't exist; drop them so the write still lands (date-only, as before).
+        msg_first = str(e)
+        if "occurred_at" in msg_first or "time_known" in msg_first:
+            row.pop("occurred_at", None)
+            row.pop("time_known", None)
+            try:
+                res = supabase.table("transactions").upsert(row, on_conflict="id").execute()
+                return _ok(res.data)
+            except Exception as e_retry:
+                e = e_retry
         # Until scripts/sql/002_transactions_unified_source.sql is applied the
         # source/description columns don't exist; keep them in metadata instead
         # of losing the whole write.
@@ -846,6 +865,7 @@ def get_gmail_financial_context(user_id: str, limit: int = 30, tz_name: str = No
 
         total_credits = total_debits = internal_transfers = 0.0
         by_category: dict[str, float] = {}
+        month_by_category: dict[str, float] = {}
         for a in alerts:
             amt = _to_money(a.get("amount") or 0)
             if not amt:
@@ -869,6 +889,7 @@ def get_gmail_financial_context(user_id: str, limit: int = 30, tz_name: str = No
                         debits_week = _to_money(debits_week + amt)
                     if d >= month_start:
                         debits_month = _to_money(debits_month + amt)
+                        month_by_category[cat] = _to_money(month_by_category.get(cat, 0) + amt)
 
         recent = []
         for a in alerts[:limit]:
@@ -896,6 +917,7 @@ def get_gmail_financial_context(user_id: str, limit: int = 30, tz_name: str = No
             "total_credits": total_credits,
             "total_debits": total_debits,
             "spending_by_category": by_category,
+            "spending_by_category_month": month_by_category,
             "recent_transactions": recent,
             "alert_count": len(alerts),
             "debits_today": debits_today,
@@ -952,6 +974,7 @@ def get_chat_financial_context(user_id: str, limit: int = 50) -> dict:
         ledger_today = ledger_week = ledger_month = 0.0
 
         by_category: dict[str, float] = {}
+        month_by_category: dict[str, float] = {}
         for r in rows:
             if not _is_income(r) and not _is_transfer(r):
                 cat = r.get("category") or "other"
@@ -965,6 +988,7 @@ def get_chat_financial_context(user_id: str, limit: int = 50) -> dict:
                         ledger_week = _to_money(ledger_week + amt)
                     if d >= month_start:
                         ledger_month = _to_money(ledger_month + amt)
+                        month_by_category[cat] = _to_money(month_by_category.get(cat, 0) + amt)
 
         # Recent itemized ledger (already ordered newest-first above).
         recent = []
@@ -994,6 +1018,10 @@ def get_chat_financial_context(user_id: str, limit: int = 50) -> dict:
         merged_by_category = dict(by_category)
         for cat, amt in (gmail.get("spending_by_category") or {}).items():
             merged_by_category[cat] = _to_money(merged_by_category.get(cat, 0) + amt)
+
+        merged_month_by_category = dict(month_by_category)
+        for cat, amt in (gmail.get("spending_by_category_month") or {}).items():
+            merged_month_by_category[cat] = _to_money(merged_month_by_category.get(cat, 0) + amt)
 
         # The bank's latest alert balance wins when present (truth anchor);
         # otherwise fall back to the computed ledger balance.
@@ -1029,6 +1057,7 @@ def get_chat_financial_context(user_id: str, limit: int = 50) -> dict:
                 "ledger_transaction_count": len(rows),
                 "bank_alert_count": gmail.get("alert_count", 0),
                 "spending_by_category": merged_by_category,
+                "spending_by_category_month": merged_month_by_category,
             },
             "recent_transactions": combined,
         })
