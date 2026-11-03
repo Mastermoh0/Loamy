@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faChartPie, faComment, faFileInvoiceDollar, faListCheck,
@@ -7,6 +7,8 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import ConnectBankModal from "../components/ConnectBankModal.jsx";
 import BankLogo from "../components/BankLogo.jsx";
+import TransactionDetailModal from "../components/TransactionDetailModal.jsx";
+import { shortDate } from "../utils/shortDate.js";
 import {
   fetchAccountTransactions,
   formatNaira,
@@ -39,6 +41,10 @@ export default function AccountDetail() {
   const [typeFilter, setTypeFilter] = useState("");
   const [result, setResult] = useState({ key: null, data: null, error: null });
   const [modalOpen, setModalOpen] = useState(false);
+  const [selectedTx, setSelectedTx] = useState(null);
+  const closeDetail = useCallback(() => setSelectedTx(null), []);
+  const navigate = useNavigate();
+  const goBack = () => (window.history.length > 1 ? navigate(-1) : navigate("/dashboard"));
 
   // Loading is derived from whether the last response matches the current
   // request, so the effect only sets state from the async callback.
@@ -107,10 +113,10 @@ export default function AccountDetail() {
       </aside>
 
       <main className="invoices-main ad-main">
-        <Link to="/dashboard" className="ad-back">
+        <button type="button" className="ad-back" onClick={goBack} aria-label="Go back">
           <FontAwesomeIcon icon={faArrowLeft} />
-          <span>Back to dashboard</span>
-        </Link>
+          <span>Back</span>
+        </button>
 
         <header className="ad-header">
           <div className="ad-bank">
@@ -209,6 +215,30 @@ export default function AccountDetail() {
                   No transactions yet. New alerts from this bank will appear here after the next sync.
                 </p>
               ) : (
+                <>
+                <ul className="ad-tx-list">
+                  {transactions.map((tx) => {
+                    const isCredit = tx.type === "credit";
+                    const description = tx.merchant || tx.description || tx.raw_subject || "Transaction";
+                    return (
+                      <li key={tx.id} className="ad-tx-row">
+                        <button
+                          type="button"
+                          className="ad-tx-btn"
+                          onClick={() => setSelectedTx(tx)}
+                          aria-label={`View details: ${description}`}
+                        >
+                          <span className="ad-tx-desc">{description}</span>
+                          <span className={`ad-tx-amount ${isCredit ? "ad-income-text" : "ad-expense-text"}`}>
+                            {isCredit ? "+" : "−"}{formatNaira(tx.amount ?? tx.transaction_amount ?? 0)}
+                          </span>
+                          <span className="ad-tx-date">{shortDate(tx.date)}</span>
+                          <span className="ad-chip ad-tx-chip">{tx.category || "Uncategorized"}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
                 <div className="ad-table-wrap">
                   <table className="ad-table">
                     <thead>
@@ -224,7 +254,15 @@ export default function AccountDetail() {
                       {transactions.map((tx) => {
                         const isCredit = tx.type === "credit";
                         return (
-                          <tr key={tx.id}>
+                          <tr
+                            key={tx.id}
+                            className="ad-table-row"
+                            tabIndex={0}
+                            onClick={() => setSelectedTx(tx)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedTx(tx); }
+                            }}
+                          >
                             <td className="ad-nowrap">{formatDate(tx.date)}</td>
                             <td className="ad-desc">{tx.merchant || tx.description || tx.raw_subject || "Transaction"}</td>
                             <td><span className="ad-chip">{tx.category || "Uncategorized"}</span></td>
@@ -238,11 +276,18 @@ export default function AccountDetail() {
                     </tbody>
                   </table>
                 </div>
+                </>
               )}
             </section>
           </>
         )}
       </main>
+
+      <TransactionDetailModal
+        tx={selectedTx}
+        bank={account ? { name: account.bank_name || account.nickname, slug: account.bank_slug, logo: account.logo } : null}
+        onClose={closeDetail}
+      />
 
       <ConnectBankModal
         isOpen={modalOpen}

@@ -621,6 +621,14 @@ const createNewChat = async (title) => {
                         <span className="logo-text">Loamy</span>
                         <button
                             type="button"
+                            className="sidebar-close-btn"
+                            onClick={() => setDrawerOpen(false)}
+                            aria-label="Close menu"
+                        >
+                            <FontAwesomeIcon icon={faChevronLeft} />
+                        </button>
+                        <button
+                            type="button"
                             className="sidebar-toggle"
                             onClick={toggleCollapsed}
                             aria-label={collapsed ? "Open sidebar" : "Close sidebar"}
@@ -758,9 +766,6 @@ const createNewChat = async (title) => {
             <main className="chat-main">
                 <header className="chat-header">
                     <div className="model-selector">
-                        <Link to="/dashboard" className="chat-back-btn" aria-label="Back to dashboard">
-                            <FontAwesomeIcon icon={faChevronLeft} />
-                        </Link>
                         <button
                             type="button"
                             className="chat-menu-toggle"
