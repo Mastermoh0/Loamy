@@ -2507,6 +2507,31 @@ async def whatsapp_link_status(user_id: str):
 
 
 
+@router.get("/user-timezone")
+async def get_user_timezone(user_id: str):
+    """The timezone Loamy uses for this user's today / week / month."""
+    tz_name = database.get_user_timezone(user_id)
+    res = database.get_user_by_id(user_id)
+    row = res.get("data") if res.get("status") == "success" else None
+    return {
+        "status": "success",
+        "timezone": tz_name,
+        "is_set": bool(row and row.get("timezone")),
+    }
+
+
+@router.post("/user-timezone")
+async def set_user_timezone(data: dict):
+    user_id = data.get("user_id")
+    tz_name = (data.get("timezone") or "").strip()
+    if not user_id:
+        return {"status": "error", "error": "user_id is required"}
+    saved = database.set_user_timezone(user_id, tz_name)
+    if saved["status"] != "success":
+        return {"status": "error", "error": saved["error"]}
+    return {"status": "success", "timezone": tz_name}
+
+
 @router.post("/signup")
 async def signup(data: dict):
     """Create a new user account"""

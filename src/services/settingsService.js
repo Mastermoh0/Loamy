@@ -46,7 +46,49 @@ export const keys = {
   gmail: (userId) => (isRealUserId(userId) ? ["gmail-status", userId] : null),
   whatsapp: (userId) => (isRealUserId(userId) ? ["whatsapp-status", userId] : null),
   banks: (userId) => (isRealUserId(userId) ? ["bank-accounts", userId] : null),
+  timezone: (userId) => (isRealUserId(userId) ? ["user-timezone", userId] : null),
 };
+
+export const FALLBACK_TIMEZONES = [
+  "Africa/Lagos", "Africa/Accra", "Africa/Nairobi", "Africa/Johannesburg", "Africa/Cairo",
+  "Indian/Mauritius", "Asia/Kolkata", "Asia/Dubai", "Asia/Singapore",
+  "Europe/London", "Europe/Paris", "America/New_York", "America/Chicago",
+  "America/Los_Angeles", "UTC",
+];
+
+export function listTimezones() {
+  try {
+    const zones = Intl.supportedValuesOf("timeZone");
+    return zones.includes("UTC") ? zones : [...zones, "UTC"];
+  } catch {
+    return FALLBACK_TIMEZONES;
+  }
+}
+
+export function browserTimezone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+  } catch {
+    return "";
+  }
+}
+
+export async function fetchTimezone([, userId]) {
+  const res = await getJson(`/user-timezone?user_id=${encodeURIComponent(userId)}`);
+  if (res.status !== "success") throw new Error(res.error || "Could not load timezone");
+  return { timezone: res.timezone, isSet: Boolean(res.is_set) };
+}
+
+export async function saveTimezone(userId, timezone) {
+  const res = await fetch(`${API_URL}/user-timezone`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id: userId, timezone }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (body.status !== "success") throw new Error(body.error || "Could not save timezone");
+  return { timezone: body.timezone, isSet: true };
+}
 
 export async function fetchFacts([, userId]) {
   const res = await getJson(`/memory/${encodeURIComponent(userId)}`);

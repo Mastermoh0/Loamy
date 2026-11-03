@@ -6,6 +6,7 @@ import useSWR from "swr";
 import Sidebar from "./components/Sidebar";
 import AccountPanel from "./components/settings/AccountPanel";
 import InfoPanel from "./components/settings/InfoPanel";
+import FinancialPanel from "./components/settings/FinancialPanel";
 import IntegrationsPanel from "./components/settings/IntegrationsPanel";
 import DataPanel from "./components/settings/DataPanel";
 import {
@@ -56,16 +57,7 @@ function renderPanel(id) {
         />
       );
     case "financial":
-      return (
-        <InfoPanel
-          rows={[
-            ["Base currency", "Naira (NGN)"],
-            ["Foreign amounts", "Converted at the rate on the day, original amount kept"],
-            ["Categories", "Learned from your confirmations, per account"],
-          ]}
-          note="Changing your base currency is not available yet."
-        />
-      );
+      return <FinancialPanel />;
     case "integrations":
       return <IntegrationsPanel />;
     case "data":

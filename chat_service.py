@@ -20,6 +20,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import database
+import timezones
 import categorizer
 import gemini_gateway
 import review_actions
@@ -309,7 +310,7 @@ def apply_chat_categorization(user_id: str, vendor: str, category: str, amount=N
             return False
 
     updated = 0
-    resolved_at = datetime.now().isoformat()
+    resolved_at = timezones.utc_now_iso()
 
     try:
         queue = review_queue_collection.get(where={"user_id": user_id})
@@ -695,7 +696,7 @@ async def chat_with_history(query: dict):
     
     # Pre-calculate accurate date information so AI doesn't have to guess
     from calendar import monthrange
-    now = datetime.now()
+    now = timezones.local_now(database.get_user_timezone(user_id))
     current_date = now.strftime("%B %d, %Y")  # e.g., "April 08, 2026"
     current_day = now.day
     current_month = now.month
@@ -1538,8 +1539,8 @@ CURRENCY_SYMBOLS = {"NGN": "\u20a6", "USD": "$", "EUR": "\u20ac", "GBP": "\u00a3
 
 
 
-def _resolve_tx_date(raw) -> str:
-    today = datetime.now().date()
+def _resolve_tx_date(raw, user_id: str = None) -> str:
+    today = timezones.local_today(database.get_user_timezone(user_id) if user_id else None)
     text = str(raw or "").strip().lower()
     if not text or text == "today":
         return today.isoformat()
@@ -1575,7 +1576,7 @@ def add_manual_transaction(user_id: str, amount, currency: str = "NGN", category
         resolved_category = categorizer.categorize_one(amount_ngn, description, description)["category"]
     resolved_category = categorizer.enforce_tech_taxonomy(description, resolved_category)
 
-    tx_date = _resolve_tx_date(date)
+    tx_date = _resolve_tx_date(date, user_id)
     tx_id = f"{'cash' if source == 'manual_cash' else 'trans'}_{os.urandom(6).hex()}"
     doc_text = f"Spent \u20a6{amount_ngn:,.2f} on {description} ({resolved_category}) on {tx_date}"
     if currency != "NGN":
@@ -1646,7 +1647,7 @@ MANUAL_TRANSACTION_TOOL = {
 def extract_manual_transaction_calls(text: str, user_id: str = None) -> list:
     """Ask Gemini (through the gateway) whether the message logs spends; return one args
     dict per expense. Raises GeminiGatewayError when the call is refused or fails."""
-    today = datetime.now()
+    today = timezones.local_now(database.get_user_timezone(user_id) if user_id else None)
     prompt = (
         f"Today is {today.strftime('%A, %Y-%m-%d')}. You route WhatsApp messages for Loamy, "
         "a personal finance app. If the user is REPORTING money they already spent "
