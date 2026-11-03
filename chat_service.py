@@ -180,6 +180,12 @@ def _format_context(ctx: dict) -> str:
         f"  - {cat}: ₦{amt:,.2f}" for cat, amt in by_cat.items()
     ) or "  - No categorized spending yet."
 
+    month_cat_lines = "\n".join(
+        f"  - {cat}: ₦{amt:,.2f}"
+        for cat, amt in sorted((summary.get("spending_by_category_month") or {}).items(),
+                               key=lambda kv: -kv[1])
+    ) or "  - No categorized spending this month yet."
+
     ledger_lines = "\n".join(_format_transaction_line(t) for t in recent) \
         or "  - No transactions recorded yet."
 
@@ -223,7 +229,10 @@ def _format_context(ctx: dict) -> str:
 === SPENDING THIS PERIOD (authoritative, already computed - quote exactly) ===
 {period_lines}
 
-=== SPENDING BY CATEGORY ===
+=== SPENDING BY CATEGORY, THIS MONTH ONLY (authoritative - use for "this month" breakdowns) ===
+{month_cat_lines}
+
+=== SPENDING BY CATEGORY, ALL TIME (never present this as a single month) ===
 {cat_lines}
 
 === RECENT TRANSACTIONS (most recent first, both sources) ===
@@ -559,22 +568,67 @@ def build_wealth_context(user_id: str, tx_limit: int = 40) -> str:
 
         pool.sort(key=lambda t: (t["ms"], t["date"]), reverse=True)
 
-        by_category, by_merchant = {}, {}
-        money_in = money_out = 0.0
+        # Every figure the AI sees is scoped to a named period in the user's own
+        # timezone. An unscoped all-time total is what the AI used to mislabel
+        # as "this month".
+        bounds = timezones.period_bounds(database.get_user_timezone(user_id))
+        today, week_start, month_start = bounds["today"], bounds["week_start"], bounds["month_start"]
+        last_month_end = month_start - timedelta(days=1)
+        last_month_start = last_month_end.replace(day=1)
+
         for t in pool:
-            if t["type"] == "credit":
-                money_in += t["amount"]
+            t["day"] = database._to_date_obj(t["date"])
+
+        def _summarize(start, end):
+            money_in = money_out = moved = 0.0
+            cats = {}
+            for t in pool:
+                if start is not None:
+                    day = t["day"]
+                    if day is None or day < start or (end is not None and day > end):
+                        continue
+                if categorizer.is_internal_transfer(t["category"]):
+                    if t["type"] != "credit":
+                        moved += t["amount"]
+                    continue
+                if t["type"] == "credit":
+                    money_in += t["amount"]
+                else:
+                    money_out += t["amount"]
+                    cats[t["category"]] = cats.get(t["category"], 0) + t["amount"]
+            return money_in, money_out, moved, cats
+
+        def _period_block(title, start, end):
+            m_in, m_out, moved, cats = _summarize(start, end)
+            lines = "\n".join(
+                f"  - {c}: {_naira(a)}" for c, a in sorted(cats.items(), key=lambda kv: -kv[1])
+            ) or "  - No spending recorded in this period."
+            return (
+                f"=== {title} ===\n"
+                f"- Money in: {_naira(m_in)}\n"
+                f"- Money out (real spending): {_naira(m_out)}\n"
+                f"- Net flow: {_naira(m_in - m_out)}\n"
+                f"- Moved between the user's own accounts (Internal Transfers, NOT spending, excluded above): {_naira(moved)}\n"
+                f"- Spending by category:\n{lines}"
+            )
+
+        period_text = "\n\n".join([
+            _period_block(f"TODAY ({today:%d %b %Y})", today, today),
+            _period_block(f"THIS WEEK (Monday {week_start:%d %b} to {today:%d %b %Y})", week_start, None),
+            _period_block(f"THIS MONTH ({month_start:%B %Y}: {month_start:%d %b} to {today:%d %b})", month_start, None),
+            _period_block(f"LAST MONTH ({last_month_start:%B %Y})", last_month_start, last_month_end),
+            _period_block("ALL TIME (every record on file; never present this as a single month)", None, None),
+        ])
+
+        by_merchant = {}
+        for t in pool:
+            if t["type"] == "credit" or categorizer.is_internal_transfer(t["category"]):
                 continue
-            money_out += t["amount"]
-            by_category[t["category"]] = by_category.get(t["category"], 0) + t["amount"]
             key = t["merchant"].strip().lower()
             entry = by_merchant.setdefault(key, {"name": t["merchant"], "total": 0.0, "count": 0})
             entry["total"] += t["amount"]
             entry["count"] += 1
 
-        category_lines = "\n".join(
-            f"  - {c}: {_naira(a)}" for c, a in sorted(by_category.items(), key=lambda kv: -kv[1])
-        ) or "  - No spending recorded yet."
         merchant_lines = "\n".join(
             f"  - {m['name']}: {_naira(m['total'])} across {m['count']} payment(s)"
             for m in sorted(by_merchant.values(), key=lambda m: -m["total"])[:8]
@@ -594,16 +648,13 @@ def build_wealth_context(user_id: str, tx_limit: int = 40) -> str:
 === BALANCE BY BANK (authoritative) ===
 {chr(10).join(bank_lines)}
 
-=== OVERALL CASH FLOW (all banks + cash + receipts) ===
-- Total money in: {_naira(money_in)}
-- Total money out: {_naira(money_out)}
-- Net flow: {_naira(money_in - money_out)}
-- Of the money out, cash and receipts logged in the app: {_naira(cash_total_out)}
+PERIOD RULES: figures below cover all banks, cash and receipts. Answer any question about
+"today", "this week", "this month" or "last month" ONLY from that period's section, and name
+the period in the reply. Internal Transfers are never spending or income.
 
-=== SPENDING BY CATEGORY ===
-{category_lines}
+{period_text}
 
-=== TOP MERCHANTS BY SPEND ===
+=== TOP MERCHANTS BY SPEND (all time, transfers excluded) ===
 {merchant_lines}
 
 === RECENT TRANSACTIONS (newest first, every bank) ===
