@@ -728,6 +728,7 @@
 
 /* Mobile drawer controls are hidden on desktop */
 .chat-menu-toggle,
+.chat-back-btn,
 .chat-drawer-backdrop {
     display: none;
 }
@@ -888,13 +889,30 @@
         padding-bottom: calc(16px + env(safe-area-inset-bottom));
     }
 
+    .chat-back-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        margin-left: -8px;
+        border-radius: 12px;
+        color: #225a24;
+        font-size: 18px;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .chat-back-btn:active {
+        background: rgba(34, 90, 36, 0.1);
+    }
+
     .chat-menu-toggle {
         display: inline-flex;
         align-items: center;
         justify-content: center;
         width: 40px;
         height: 40px;
-        margin-left: -6px;
+        margin-left: 0;
         border: none;
         border-radius: 12px;
         background: none;

@@ -8,13 +8,19 @@
   @media (max-width: 768px) {
     .accounts-stream .accounts-table-wrap { display: none; }
     .accounts-tx-list { display: block; }
-    .accounts-tx-row { padding: 12px 2px; border-bottom: 1px solid #edf1ee; }
+    .accounts-tx-row { padding: 16px 2px; border-bottom: 1px solid #edf1ee; }
     .accounts-tx-row:last-child { border-bottom: 0; }
-    .accounts-tx-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-    .accounts-tx-desc { flex: 1; min-width: 0; color: #17324d; font-size: .92rem; font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .accounts-tx-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .accounts-tx-desc { flex: 1; min-width: 0; color: #111827; font-size: .95rem; font-weight: 600; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .accounts-tx-amount { flex: none; font-size: .95rem; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
-    .accounts-tx-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-top: 6px; color: #718096; font-size: .78rem; }
-    .accounts-tx-date { white-space: nowrap; }
+    .accounts-tx-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+    .accounts-tx-source { display: flex; align-items: center; flex: 1; min-width: 0; gap: 8px; color: #6b7280; font-size: .75rem; white-space: nowrap; }
+    .accounts-tx-source .bank-badge { gap: 6px; min-width: 0; }
+    .accounts-tx-source .bank-badge img { width: 18px; height: 18px; flex: none; }
+    .accounts-tx-date { flex: none; white-space: nowrap; }
+    .accounts-tx-meta .category-badge { flex: none; max-width: 48%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .72rem; padding: 4px 9px; }
+    .all-accounts-back { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; margin-left: -6px; padding: 0 10px 0 6px; border-radius: 12px; color: #177a35; font-weight: 500; }
+    .all-accounts-back:active { background: #eef5ef; }
     .accounts-section-title { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
     .all-accounts-header { flex-direction: column; align-items: stretch; gap: 14px; margin-bottom: 18px; }
     .all-accounts-actions { width: 100%; }
