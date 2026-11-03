@@ -16,16 +16,9 @@ import { fetchReviewQueue } from "../services/reviewQueueService";
 import { getSessionUserId } from "../services/bankService";
 import "./MobileNav.css";
 
-// Only the auth and onboarding flows go without the tab bar. Chat keeps it, and
-// it slides away while a text field has focus so the keyboard and composer get the room.
-const HIDDEN_ON = ["/", "/signup", "/onboarding"];
-const NON_TEXT_INPUTS = ["checkbox", "radio", "button", "submit", "reset", "file", "range", "color"];
-
-const isTextField = (el) =>
-  !!el &&
-  (el.tagName === "TEXTAREA" ||
-    el.isContentEditable ||
-    (el.tagName === "INPUT" && !NON_TEXT_INPUTS.includes(el.type)));
+// Auth, onboarding and Chat go without the tab bar. Chat needs the full height
+// for the composer, and it has its own back button and menu in the header.
+const HIDDEN_ON = ["/", "/signup", "/onboarding", "/chat"];
 const MORE_ROUTES = ["/accounts", "/settings", "/gmail-connect"];
 const REFRESH_MS = 60_000;
 
@@ -61,7 +54,6 @@ function useReviewCount(enabled, pathname) {
 export default function MobileNav() {
   const { pathname } = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
-  const [typing, setTyping] = useState(false);
   const visible = !HIDDEN_ON.includes(pathname);
   const reviewCount = useReviewCount(visible, pathname);
 
@@ -69,22 +61,6 @@ export default function MobileNav() {
     document.body.classList.toggle("has-mobile-nav", visible);
     return () => document.body.classList.remove("has-mobile-nav");
   }, [visible]);
-
-  useEffect(() => {
-    const onFocusIn = (e) => isTextField(e.target) && setTyping(true);
-    const onFocusOut = (e) => setTyping(isTextField(e.relatedTarget));
-    document.addEventListener("focusin", onFocusIn);
-    document.addEventListener("focusout", onFocusOut);
-    return () => {
-      document.removeEventListener("focusin", onFocusIn);
-      document.removeEventListener("focusout", onFocusOut);
-    };
-  }, []);
-
-  useEffect(() => {
-    document.body.classList.toggle("mobile-nav-typing", typing);
-    return () => document.body.classList.remove("mobile-nav-typing");
-  }, [typing]);
 
   useEffect(() => {
     if (!moreOpen) return undefined;
@@ -100,7 +76,7 @@ export default function MobileNav() {
 
   return (
     <>
-      <nav className={`mobile-nav${typing ? " is-hidden" : ""}`} aria-label="Primary">
+      <nav className="mobile-nav" aria-label="Primary">
         <NavLink to="/dashboard" className={({ isActive }) => `mobile-tab${isActive || pathname === "/spending" ? " active" : ""}`}>
           <FontAwesomeIcon icon={faHouse} />
           <span>Home</span>

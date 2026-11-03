@@ -6,7 +6,7 @@ import {
     faRightFromBracket, faArrowUp, faPaperclip, faEnvelope,
     faCoffee, faLaptop, faCartShopping, faCalculator,
     faEllipsis, faPen, faTrash, faCheck, faFileInvoiceDollar, faBuildingColumns,
-    faFilePdf, faFileWord, faFileExcel, faFileImage, faFileLines, faBars, faTableColumns
+    faFilePdf, faFileWord, faFileExcel, faFileImage, faFileLines, faBars, faTableColumns, faChevronLeft
 } from "@fortawesome/free-solid-svg-icons";
 import useSidebarCollapsed from "./hooks/useSidebarCollapsed";
 import Logo from "./assets/LoamyLogo.png";
@@ -758,6 +758,9 @@ const createNewChat = async (title) => {
             <main className="chat-main">
                 <header className="chat-header">
                     <div className="model-selector">
+                        <Link to="/dashboard" className="chat-back-btn" aria-label="Back to dashboard">
+                            <FontAwesomeIcon icon={faChevronLeft} />
+                        </Link>
                         <button
                             type="button"
                             className="chat-menu-toggle"

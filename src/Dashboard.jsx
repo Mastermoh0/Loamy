@@ -110,8 +110,8 @@ const ConnectedBanks = ({ accounts, bankFlows, onAddBank }) => {
           <small>{rows.length > 0 ? `${rows.length} connected ${rows.length === 1 ? "bank" : "banks"}` : "Connect a bank to see your money"}</small>
         </div>
         <div className="net-worth-flows">
-          <div className="net-worth-flow"><span><i className="fa-solid fa-arrow-down" aria-hidden="true" /> Cash in</span><strong>{formatBankCurrency(totalIn)}</strong></div>
-          <div className="net-worth-flow"><span><i className="fa-solid fa-arrow-up" aria-hidden="true" /> Cash out</span><strong>{formatBankCurrency(totalOut)}</strong></div>
+          <div className="net-worth-flow"><span><i className="fa-solid fa-arrow-down" aria-hidden="true" /> Cash in (all time)</span><strong>{formatBankCurrency(totalIn)}</strong></div>
+          <div className="net-worth-flow"><span><i className="fa-solid fa-arrow-up" aria-hidden="true" /> Cash out (all time)</span><strong>{formatBankCurrency(totalOut)}</strong></div>
         </div>
       </div>
       <div className="connected-banks-card">
