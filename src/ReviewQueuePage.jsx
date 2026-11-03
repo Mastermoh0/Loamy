@@ -16,6 +16,7 @@ import ReviewTabs from "./components/reviewQueue/ReviewTabs";
 import ExpenseCard from "./components/reviewQueue/ExpenseCard";
 import ActivityList from "./components/reviewQueue/ActivityList";
 import Pagination, { paginate } from "./components/reviewQueue/Pagination";
+import { shortDate } from "./utils/shortDate";
 import "./InvoicesPage.css";
 import "./ReviewQueuePage.css";
 import "./ReviewQueueTabs.css";
@@ -269,9 +270,11 @@ const ReviewQueuePage = () => {
                 </span>
                 <div className="rqt-recent-main">
                   <span className="rqt-recent-vendor" title={item.vendor}>{item.vendor || "Transaction"}</span>
-                  <span className="rqt-recent-date">{item.date}</span>
+                  <span className="rqt-recent-meta">
+                    <span className="rqt-recent-date">{shortDate(item.date)}</span>
+                    {item.category && <span className="rqt-recent-tag">{item.category}</span>}
+                  </span>
                 </div>
-                {item.category && <span className="rqt-recent-tag">{item.category}</span>}
                 <span
                   className={`rqt-recent-amount ${item.transaction_type === "credit" ? "is-credit" : "is-debit"}`}
                 >

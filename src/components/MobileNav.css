@@ -5,8 +5,44 @@
 }
 
 @media (max-width: 768px) {
+  :root {
+    --mobile-nav-h: calc(68px + env(safe-area-inset-bottom));
+  }
+
+  html {
+    scroll-padding-bottom: var(--mobile-nav-h);
+  }
+
   body.has-mobile-nav #root {
-    padding-bottom: calc(68px + env(safe-area-inset-bottom));
+    padding-bottom: var(--mobile-nav-h);
+  }
+
+  /* Chat is a fixed-height app shell, so it shrinks to sit above the bar
+     instead of scrolling. The bar slides away while typing and it fills the screen. */
+  body.has-mobile-nav:has(.chat-app-container) #root,
+  body.has-mobile-nav.mobile-nav-typing #root {
+    padding-bottom: 0;
+  }
+
+  body.has-mobile-nav .chat-app-container,
+  body.has-mobile-nav .chat-main {
+    height: calc(100vh - var(--mobile-nav-h));
+    height: calc(100dvh - var(--mobile-nav-h));
+  }
+
+  body.has-mobile-nav.mobile-nav-typing .chat-app-container,
+  body.has-mobile-nav.mobile-nav-typing .chat-main {
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .mobile-nav {
+    transition: transform 0.2s ease;
+  }
+
+  .mobile-nav.is-hidden {
+    transform: translateY(110%);
+    pointer-events: none;
   }
 
   .mobile-nav {

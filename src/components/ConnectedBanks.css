@@ -9,7 +9,14 @@
 .connected-bank-flow .flow-in { color: #20852b; }
 .connected-bank-flow .flow-out { color: #d32f2f; }
 .connected-banks-note { margin: 12px 0 0; color: #8b918b; font-size: .82rem; }
-@media (max-width: 650px) { .net-worth-hero { flex-direction: column; align-items: flex-start; } .net-worth-flows { width: 100%; } .net-worth-flow { flex: 1; min-width: 0; } .connected-bank-balance { display: flex; } }
+@media (max-width: 650px) {
+  .net-worth-hero { flex-direction: column; align-items: flex-start; gap: 16px; padding: 20px 18px; }
+  .net-worth-flows { width: 100%; flex-direction: column; flex-wrap: nowrap; gap: 8px; }
+  .net-worth-flow { flex: none; min-width: 0; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; }
+  .net-worth-hero .net-worth-flow strong { font-size: 1.05rem; white-space: nowrap; }
+  .connected-bank-balance { display: flex; }
+  .connected-bank-flow { flex-wrap: wrap; row-gap: 2px; }
+}
  .net-worth-eyebrow { display: flex; align-items: center; gap: 9px; font-size: .9rem; opacity: .82; text-transform: uppercase; letter-spacing: .08em; }
  .net-worth-hero strong { font-size: clamp(2rem, 4vw, 3rem); letter-spacing: -.04em; }
  .net-worth-hero small { opacity: .72; }
