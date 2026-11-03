@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
     faArrowLeft, faEnvelope, faEnvelopeOpen, faReceipt, faCalendarCheck,
@@ -433,10 +433,15 @@ const GmailConnectPage = () => {
         <div className="gmail-container">
             {/* Header */}
             <header className="gmail-header">
-                <Link to="/chat" className="back-btn">
+                <button
+                    type="button"
+                    className="back-btn"
+                    aria-label="Go back"
+                    onClick={() => navigate(window.history.length > 1 ? -1 : "/dashboard")}
+                >
                     <FontAwesomeIcon icon={faArrowLeft} />
-                    <span>Back to Chat</span>
-                </Link>
+                    <span>Back</span>
+                </button>
                 <h1>Gmail Integration</h1>
             </header>
 

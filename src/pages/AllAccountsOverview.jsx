@@ -6,6 +6,7 @@ import BankLogo from "../components/BankLogo.jsx";
 import ConnectBankModal from "../components/ConnectBankModal.jsx";
 import Sidebar from "../components/Sidebar.jsx";
 import { fetchConnectedAccounts, fetchAccountTransactions, formatNaira, getSessionUserId } from "../services/bankService.js";
+import { shortDate } from "../utils/shortDate.js";
 import "../InvoicesPage.css";
 import "./AllAccountsOverview.css";
 
@@ -42,6 +43,11 @@ export default function AllAccountsOverview() {
     debits: accounts.reduce((sum, account) => sum + Number(account.summary?.total_debits || 0), 0),
   }), [accounts]);
 
+  const sortedTransactions = useMemo(
+    () => [...transactions].sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))),
+    [transactions],
+  );
+
   const syncAll = async () => {
     setSyncing(true);
     window.dispatchEvent(new CustomEvent("loamy:data-synced"));
@@ -64,7 +70,7 @@ export default function AllAccountsOverview() {
       <section><div className="accounts-section-title"><h2>Connected banks</h2><span>{accounts.length} connected</span></div>
         {loading ? <p className="accounts-muted">Loading accounts…</p> : accounts.length === 0 ? <div className="accounts-empty"><FontAwesomeIcon icon={faBuildingColumns} /><p>No bank accounts connected yet.</p><button className="primary-action" onClick={() => setModalOpen(true)}>Connect your first bank</button></div> : <div className="accounts-grid">{accounts.map((account) => <button className="account-overview-card" key={account.id} onClick={() => navigate(`/accounts/${encodeURIComponent(account.id)}`)}><span className="account-logo"><BankLogo name={account.bank_name} slug={account.slug} backendLogo={account.logo} size={32} /></span><span><strong>{account.nickname || account.bank_name}</strong><small>{account.account_tail ? `•••• ${account.account_tail}` : account.bank_name}</small></span><span className="account-card-balance"><strong>{formatNaira(account.summary?.balance || 0)}</strong><small>{account.summary?.transaction_count || 0} transactions</small></span><span className="account-chevron">›</span></button>)}</div>}
       </section>
-      <section className="accounts-stream"><div className="accounts-section-title"><h2>All transactions</h2><span>Latest activity across connected banks</span></div>{transactions.length === 0 ? <p className="accounts-muted">No transactions yet.</p> : <div className="accounts-table-wrap"><table><thead><tr><th>Date</th><th>Bank</th><th>Description</th><th>Category</th><th className="accounts-number">Amount</th></tr></thead><tbody>{transactions.sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))).map((tx, index) => { const credit = tx.type === "credit"; return <tr key={tx.id || `${tx.date}-${index}`}><td>{tx.date || "—"}</td><td><span className="bank-badge"><BankLogo name={tx.bank.bank_name} slug={tx.bank.slug} backendLogo={tx.bank.logo} size={22} />{tx.bank.bank_name}</span></td><td>{descriptionOf(tx)}</td><td><span className="category-badge">{tx.category || "Uncategorized"}</span></td><td className={`accounts-number ${credit ? "accounts-positive" : "accounts-negative"}`}>{credit ? "+" : "−"}{formatNaira(valueOf(tx, "amount", tx.transaction_amount || 0))}</td></tr>; })}</tbody></table></div>}</section>
+      <section className="accounts-stream"><div className="accounts-section-title"><h2>All transactions</h2><span>Latest activity across connected banks</span></div>{transactions.length === 0 ? <p className="accounts-muted">No transactions yet.</p> : <><ul className="accounts-tx-list">{sortedTransactions.map((tx, index) => { const credit = tx.type === "credit"; return <li className="accounts-tx-row" key={tx.id || `${tx.date}-${index}`}><div className="accounts-tx-top"><span className="accounts-tx-desc">{descriptionOf(tx)}</span><span className={`accounts-tx-amount ${credit ? "accounts-positive" : "accounts-negative"}`}>{credit ? "+" : "−"}{formatNaira(valueOf(tx, "amount", tx.transaction_amount || 0))}</span></div><div className="accounts-tx-meta"><span className="bank-badge"><BankLogo name={tx.bank.bank_name} slug={tx.bank.slug} backendLogo={tx.bank.logo} size={18} />{tx.bank.bank_name}</span><span className="accounts-tx-date">{shortDate(tx.date)}</span><span className="category-badge">{tx.category || "Uncategorized"}</span></div></li>; })}</ul><div className="accounts-table-wrap"><table><thead><tr><th>Date</th><th>Bank</th><th>Description</th><th>Category</th><th className="accounts-number">Amount</th></tr></thead><tbody>{sortedTransactions.map((tx, index) => { const credit = tx.type === "credit"; return <tr key={tx.id || `${tx.date}-${index}`}><td>{tx.date || "—"}</td><td><span className="bank-badge"><BankLogo name={tx.bank.bank_name} slug={tx.bank.slug} backendLogo={tx.bank.logo} size={22} />{tx.bank.bank_name}</span></td><td>{descriptionOf(tx)}</td><td><span className="category-badge">{tx.category || "Uncategorized"}</span></td><td className={`accounts-number ${credit ? "accounts-positive" : "accounts-negative"}`}>{credit ? "+" : "−"}{formatNaira(valueOf(tx, "amount", tx.transaction_amount || 0))}</td></tr>; })}</tbody></table></div></>}</section>
     </main>
     <ConnectBankModal isOpen={modalOpen} onClose={() => setModalOpen(false)} userId={userId} connectedAccounts={accounts} onConnected={() => { setModalOpen(false); load(); }} />
   </div>;
