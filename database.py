@@ -19,6 +19,8 @@ from datetime import datetime, date, timedelta
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
+import timezones
+
 load_dotenv()
 
 # --- Connection ---------------------------------------------------------------
@@ -205,6 +207,27 @@ def update_user(user_id: str, **fields) -> dict:
         return _ok(res.data)
     except Exception as e:
         return _err(e)
+
+
+def get_user_timezone(user_id: str) -> str:
+    """The user's IANA timezone name; falls back to the default when the user,
+    the column, or the stored value is missing or invalid."""
+    try:
+        res = get_user_by_id(user_id)
+        row = res["data"] if res["status"] == "success" else None
+        name = (row or {}).get("timezone")
+        if timezones.is_valid_timezone(name):
+            return name
+    except Exception as e:
+        print(f"[Database] get_user_timezone failed: {e}")
+    return timezones.DEFAULT_TIMEZONE
+
+
+def set_user_timezone(user_id: str, tz_name: str) -> dict:
+    if not timezones.is_valid_timezone(tz_name):
+        return _err("Unknown timezone. Use an IANA name such as Africa/Lagos.")
+    ensure_user(user_id)
+    return update_user(user_id, timezone=tz_name)
 
 
 def normalize_phone(phone: str) -> str:
@@ -533,7 +556,7 @@ def add_chat(user_id: str, chat_id: str, title: str = "New Chat",
              messages: list = None) -> dict:
     """Create (or replace) a chat thread. `messages` is the full conversation
     array, stored as JSON so the sidebar and transcript stay in one row."""
-    now = datetime.now().isoformat()
+    now = timezones.utc_now_iso()
     row = {
         "id": chat_id,
         "user_id": user_id,
@@ -572,7 +595,7 @@ def get_chat(chat_id: str) -> dict:
 
 def update_chat(chat_id: str, messages: list = None, title: str = None) -> dict:
     """Update a thread's messages and/or title; always bumps updated_at."""
-    fields = {"updated_at": datetime.now().isoformat()}
+    fields = {"updated_at": timezones.utc_now_iso()}
     if messages is not None:
         fields["messages"] = messages
     if title is not None:
@@ -700,7 +723,7 @@ def save_gmail_data(user_id: str, emails: list, stats: dict = None) -> dict:
         "emails": emails or [],
         "stats": stats or {},
         "email_count": len(emails or []),
-        "synced_at": datetime.now().isoformat(),
+        "synced_at": timezones.utc_now_iso(),
     }
     try:
         res = supabase.table("gmail_data").upsert(row, on_conflict="id").execute()
@@ -763,7 +786,7 @@ def categorize_narration(narration: str) -> str:
     return "Other"
 
 
-def get_gmail_financial_context(user_id: str, limit: int = 30) -> dict:
+def get_gmail_financial_context(user_id: str, limit: int = 30, tz_name: str = None) -> dict:
     """Parse a user's synced bank-alert emails into a financial snapshot.
 
     Returns latest bank balance (the bank's own 'truth anchor'), total credits
@@ -799,9 +822,9 @@ def get_gmail_financial_context(user_id: str, limit: int = 30) -> dict:
         def _is_credit(a):
             return (a.get("transaction_type") or "").lower() in ("credit", "in", "income", "deposit")
 
-        today = date.today()
-        week_start = today - timedelta(days=today.weekday())  # Monday
-        month_start = today.replace(day=1)
+        tz_name = tz_name or get_user_timezone(user_id)
+        bounds = timezones.period_bounds(tz_name)
+        today, week_start, month_start = bounds["today"], bounds["week_start"], bounds["month_start"]
         debits_today = debits_week = debits_month = 0.0
 
         # The user's own categories (Review Queue / chat) win over the raw alert,
@@ -923,9 +946,9 @@ def get_chat_financial_context(user_id: str, limit: int = 50) -> dict:
         # left for the AI to eyeball from a text list of dates (which silently
         # dropped receipts whose dates weren't clean ISO). Uses occurred_on,
         # falling back to a robust parse of the raw date string.
-        today = date.today()
-        week_start = today - timedelta(days=today.weekday())  # Monday
-        month_start = today.replace(day=1)
+        tz_name = get_user_timezone(user_id)
+        bounds = timezones.period_bounds(tz_name)
+        today, week_start, month_start = bounds["today"], bounds["week_start"], bounds["month_start"]
         ledger_today = ledger_week = ledger_month = 0.0
 
         by_category: dict[str, float] = {}
@@ -961,7 +984,7 @@ def get_chat_financial_context(user_id: str, limit: int = 50) -> dict:
         # --- Merge in Gmail bank-alert data -----------------------------------
         # Never let a Gmail failure break the chat: fall back to ledger-only.
         gmail = {}
-        g_res = get_gmail_financial_context(user_id, limit=30)
+        g_res = get_gmail_financial_context(user_id, limit=30, tz_name=tz_name)
         if g_res["status"] == "success" and g_res["data"]:
             gmail = g_res["data"]
 
@@ -1001,6 +1024,7 @@ def get_chat_financial_context(user_id: str, limit: int = 50) -> dict:
                 "spent_this_month": spent_month,
                 "internal_transfers": gmail.get("internal_transfers", 0.0),
                 "today_date": today.isoformat(),
+                "timezone": tz_name,
                 "transaction_count": len(rows) + gmail.get("alert_count", 0),
                 "ledger_transaction_count": len(rows),
                 "bank_alert_count": gmail.get("alert_count", 0),
@@ -1021,7 +1045,7 @@ def save_gmail_credentials(user_id: str, refresh_token: str = None,
                            sender_domains=None) -> dict:
     """Upsert a user's Gmail OAuth credentials. Only non-None fields are written,
     so refreshing just the access token never wipes the stored refresh token."""
-    row = {"user_id": user_id, "updated_at": datetime.now().isoformat()}
+    row = {"user_id": user_id, "updated_at": timezones.utc_now_iso()}
     if refresh_token is not None:
         row["refresh_token"] = refresh_token
     if access_token is not None:
