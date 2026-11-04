@@ -14,6 +14,7 @@ import AccountDetail from "./pages/AccountDetail.jsx";
 import AllAccountsOverview from "./pages/AllAccountsOverview.jsx";
 
 import MobileNav from "./components/MobileNav.jsx";
+import NativeDeepLinkHandler from "./components/NativeDeepLinkHandler.jsx";
 
 // Global activity-driven sync. Wrapping the whole app (rather than a single
 // page) means ANY interaction anywhere can trigger an automatic bank sync.
@@ -26,6 +27,7 @@ export default function App() {
 
   return (
     <>
+    <NativeDeepLinkHandler />
     <Routes>
       {/* Auth Routes */}
       <Route path="/" element={<Login />} />

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Logo from "./assets/LoamyLogo.png";
 import { GoogleGlyph } from "./Login";
 import "./Login.css";
+import { GOOGLE_REDIRECT_URI, oauthStateParam } from "./utils/oauth";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -10,7 +11,6 @@ const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 // redirect URI (/gmail-connect) since that's the only one already
 // authorized in the Google Cloud Console.
 const GOOGLE_CLIENT_ID = "72400306293-pnjcf2kqtuli55kdn2l5ouq9qjpgc6kt.apps.googleusercontent.com";
-const GOOGLE_REDIRECT_URI = window.location.origin + "/gmail-connect";
 const GOOGLE_SCOPES = ["openid", "email", "profile"].join(" ");
 
 const SignUp = () => {
@@ -28,7 +28,7 @@ const SignUp = () => {
             `&redirect_uri=${encodeURIComponent(GOOGLE_REDIRECT_URI)}` +
             `&response_type=code` +
             `&scope=${encodeURIComponent(GOOGLE_SCOPES)}` +
-            `&state=auth` +
+            oauthStateParam("auth") +
             `&prompt=select_account`;
         window.location.href = authUrl;
     };

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
     faArrowLeft, faEnvelope, faEnvelopeOpen, faReceipt, faCalendarCheck,
@@ -7,12 +7,18 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import "./GmailConnectPage.css";
 import { isRealUserId, waitForServerSync } from "./services/activitySyncService";
+import {
+    APP_CALLBACK_URI,
+    GOOGLE_REDIRECT_URI,
+    isNativeApp,
+    oauthStateParam,
+    parseOAuthState,
+} from "./utils/oauth";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 // Google OAuth Configuration
 const GOOGLE_CLIENT_ID = "72400306293-pnjcf2kqtuli55kdn2l5ouq9qjpgc6kt.apps.googleusercontent.com";
-const GOOGLE_REDIRECT_URI = window.location.origin + "/gmail-connect";
 const GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/userinfo.email"
@@ -20,6 +26,8 @@ const GOOGLE_SCOPES = [
 
 const GmailConnectPage = () => {
     const navigate = useNavigate();
+    const location = useLocation();
+    const handledCodeRef = useRef(null);
     
     // State
     const [isConnected, setIsConnected] = useState(false);
@@ -30,16 +38,37 @@ const GmailConnectPage = () => {
     const [emailList, setEmailList] = useState([]);
 
     useEffect(() => {
-        const urlParams = new URLSearchParams(window.location.search);
+        const urlParams = new URLSearchParams(location.search);
         const code = urlParams.get("code");
-        const state = urlParams.get("state");
+        const oauthError = urlParams.get("error");
+        const { viaApp, kind: stateKind } = parseOAuthState(urlParams.get("state"));
+
+        // The native app sent Google to this https page; hand the result back
+        // to the Android app via its custom-scheme deep link.
+        if ((code || oauthError) && viaApp && !isNativeApp()) {
+            window.location.replace(`${APP_CALLBACK_URI}?${urlParams.toString()}`);
+            return;
+        }
+
+        if (code) {
+            if (handledCodeRef.current === code) return;
+            handledCodeRef.current = code;
+        }
+
+        if (oauthError && !code) {
+            window.history.replaceState({}, document.title, "/gmail-connect");
+            if (stateKind === "auth") {
+                navigate("/?google_error=" + encodeURIComponent("Google sign-in was cancelled."));
+            }
+            return;
+        }
 
         // "Continue with Google" on Login/Sign Up reuses this page's redirect
         // URI (it's the only one authorized in Google Cloud Console) and tags
         // its request with state=auth. That request happens BEFORE the user
         // has a session, so it must be handled ahead of the session check
         // below, which would otherwise bounce them straight back to "/".
-        if (code && state === "auth") {
+        if (code && stateKind === "auth") {
             window.history.replaceState({}, document.title, "/gmail-connect");
             handleAuthLoginCallback(code);
             return;
@@ -65,7 +94,7 @@ const GmailConnectPage = () => {
                 loadEmailData();
             }
         }
-    }, [navigate]);
+    }, [navigate, location.search]);
 
     // Handles the "Continue with Google" sign-in/sign-up flow (as opposed to
     // the "Connect Gmail for bank sync" flow this page normally handles).
@@ -310,7 +339,8 @@ const GmailConnectPage = () => {
             `&response_type=code` +
             `&scope=${encodeURIComponent(GOOGLE_SCOPES)}` +
             `&access_type=offline` +
-            `&prompt=consent`;
+            `&prompt=consent` +
+            oauthStateParam();
         
         window.location.href = authUrl;
     };
