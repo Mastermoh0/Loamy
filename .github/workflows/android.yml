@@ -1,4 +1,8 @@
 name: Build Android APK
+env:
+
+  VITE_PUBLIC_WEB_URL: https://loamy-ebon.vercel.app
+  run: npm run build
 
 on:
   push:
