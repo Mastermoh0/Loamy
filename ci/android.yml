@@ -24,7 +24,19 @@ jobs:
         run: npm ci
 
       - name: Build web app
-        run: npm run build
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL || vars.VITE_API_URL }}
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_URL || vars.VITE_API_URL }}
+        run: |
+          if [ -z "$VITE_API_URL" ]; then
+            echo "::error::VITE_API_URL is not set. Add it under Settings > Secrets and variables > Actions (an https:// backend URL), otherwise the APK falls back to http://127.0.0.1:8000, which is the phone itself."
+            exit 1
+          fi
+          case "$VITE_API_URL" in
+            https://*) ;;
+            *) echo "::error::VITE_API_URL must start with https:// (the Android WebView blocks http:// calls from its https://localhost origin)."; exit 1 ;;
+          esac
+          npm run build
 
       - name: Initialize Capacitor
         run: |
