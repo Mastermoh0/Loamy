@@ -9,6 +9,7 @@ import "./GmailConnectPage.css";
 import { isRealUserId, waitForServerSync } from "./services/activitySyncService";
 import {
     APP_CALLBACK_URI,
+  APP_SCHEME,
     GOOGLE_REDIRECT_URI,
     isNativeApp,
     oauthStateParam,
@@ -36,6 +37,7 @@ const GmailConnectPage = () => {
     const [transactionsFound, setTransactionsFound] = useState(0);
     const [billsDetected, setBillsDetected] = useState(0);
     const [emailList, setEmailList] = useState([]);
+    const [appLinks, setAppLinks] = useState(null);
 
     useEffect(() => {
         const urlParams = new URLSearchParams(location.search);
@@ -46,7 +48,18 @@ const GmailConnectPage = () => {
         // The native app sent Google to this https page; hand the result back
         // to the Android app via its custom-scheme deep link.
         if ((code || oauthError) && viaApp && !isNativeApp()) {
-            window.location.replace(`${APP_CALLBACK_URI}?${urlParams.toString()}`);
+            const query = urlParams.toString();
+            const schemeUrl = `${APP_CALLBACK_URI}?${query}`;
+            // Chrome on Android only reliably opens an app from a script
+            // redirect through an intent:// URL; the button below covers the
+            // case where Chrome blocks the automatic redirect (no user gesture).
+            const intentUrl =
+                `intent://gmail-connect?${query}` +
+                `#Intent;scheme=${APP_SCHEME};package=${APP_SCHEME};end`;
+            const isAndroidBrowser = /android/i.test(navigator.userAgent);
+            const target = isAndroidBrowser ? intentUrl : schemeUrl;
+            setAppLinks({ target, schemeUrl });
+            window.location.replace(target);
             return;
         }
 
@@ -458,6 +471,26 @@ const GmailConnectPage = () => {
             description: "Detect utility bills, rent reminders, and payment due dates"
         }
     ];
+
+    if (appLinks) {
+        return (
+            <div
+                className="gmail-container"
+                style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, minHeight: "100vh", padding: 24, textAlign: "center" }}
+            >
+                <h1 style={{ fontSize: 22, margin: 0 }}>Google sign-in complete</h1>
+                <p style={{ margin: 0, maxWidth: 320, lineHeight: 1.5 }}>
+                    Returning you to the Loamy app. If nothing happens, tap the button below.
+                </p>
+                <a
+                    href={appLinks.target}
+                    style={{ padding: "12px 24px", borderRadius: 12, background: "#4aa3f5", color: "#fff", fontWeight: 600, textDecoration: "none" }}
+                >
+                    Open Loamy
+                </a>
+            </div>
+        );
+    }
 
     return (
         <div className="gmail-container">
