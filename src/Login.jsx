@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Logo from "./assets/LoamyLogo.png";
 import "./Login.css";
+import { GOOGLE_REDIRECT_URI, oauthStateParam } from "./utils/oauth";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -10,7 +11,6 @@ const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 // already authorized in the Google Cloud Console. GmailConnectPage tells
 // this sign-in flow apart from its normal Gmail-connect flow via state=auth.
 const GOOGLE_CLIENT_ID = "72400306293-pnjcf2kqtuli55kdn2l5ouq9qjpgc6kt.apps.googleusercontent.com";
-const GOOGLE_REDIRECT_URI = window.location.origin + "/gmail-connect";
 const GOOGLE_SCOPES = ["openid", "email", "profile"].join(" ");
 
 // Official multi-color Google "G" mark for the sign-in button.
@@ -89,7 +89,7 @@ const Login = () => {
             `&redirect_uri=${encodeURIComponent(GOOGLE_REDIRECT_URI)}` +
             `&response_type=code` +
             `&scope=${encodeURIComponent(GOOGLE_SCOPES)}` +
-            `&state=auth` +
+            oauthStateParam("auth") +
             `&prompt=select_account`;
         window.location.href = authUrl;
     };

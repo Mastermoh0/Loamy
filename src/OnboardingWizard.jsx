@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import "./OnboardingWizard.css";
+import { GOOGLE_REDIRECT_URI, oauthStateParam } from "./utils/oauth";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -7,7 +8,6 @@ const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 // whitelisted in the Google console. Onboarding sends the user through the exact
 // same real OAuth flow; the callback is handled on /gmail-connect.
 const GOOGLE_CLIENT_ID = "72400306293-pnjcf2kqtuli55kdn2l5ouq9qjpgc6kt.apps.googleusercontent.com";
-const GOOGLE_REDIRECT_URI = window.location.origin + "/gmail-connect";
 const GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/userinfo.email",
@@ -167,7 +167,8 @@ export default function OnboardingWizard() {
             `&response_type=code` +
             `&scope=${encodeURIComponent(GOOGLE_SCOPES)}` +
             `&access_type=offline` +
-            `&prompt=consent`;
+            `&prompt=consent` +
+            oauthStateParam();
 
         window.location.href = authUrl;
     };
