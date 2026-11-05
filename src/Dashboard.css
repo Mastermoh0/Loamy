@@ -105,6 +105,21 @@
   margin-bottom: 30px;
 }
 
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Without a fixed size the logo renders at its full image size on desktop. */
+.nav-brand-mark {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
 .nav-brand h3 {
   margin: 0;
   font-size: 1.5rem;

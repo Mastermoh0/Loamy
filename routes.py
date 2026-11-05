@@ -3491,7 +3491,14 @@ async def get_connected_account_transactions(
         for e in filtered[:limit]
     ]
 
-    analytics = _summarize_bank_emails(filtered)
+    # Totals describe the whole account in the date range; the Income/Expenses
+    # tab only narrows the list, so switching tabs must not change the cards.
+    in_range = [
+        e for e in matched
+        if (not start_date or (e.get("date") or "") >= start_date)
+        and (not end_date or (e.get("date") or "") <= end_date)
+    ]
+    analytics = _summarize_bank_emails(in_range)
     analytics["top_merchants"] = [
         {**m, "total": round(m["total"], 2)}
         for m in sorted(merchants.values(), key=lambda m: m["total"], reverse=True)[:5]
