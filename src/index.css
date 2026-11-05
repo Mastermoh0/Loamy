@@ -54,6 +54,31 @@
   }
 }
 
+/* Loamy palette: forest, leaf, canvas, topsoil (warm brown) and ink. */
+:root {
+  --loam-forest: #1b5e20;
+  --loam-leaf: #2e7d32;
+  --loam-canvas: #f7f5ef;
+  --loam-topsoil: #8a6a3f;
+  --loam-ink: #1f2a1f;
+  --loam-chat-bg: #ece9de;
+}
+
+/* Phone scale: the app was a responsive website at 16px. Native apps sit
+   closer to 14px, which also scales every rem-based size in the app. */
+@media (max-width: 768px) {
+  html {
+    font-size: 14px;
+  }
+}
+
+/* Links and images are never draggable, so a long-press doesn't pop a URL preview. */
+a,
+img {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
 /* ---------- Native physics ---------- */
 html,
 body,
