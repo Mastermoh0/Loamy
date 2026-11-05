@@ -28,8 +28,14 @@ const MORE_LINKS = [
 ];
 
 const tabClass = (active) =>
-  `flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1.5 text-[11px] font-medium transition-transform active:scale-[0.98] ${
-    active ? "bg-loamy-100 text-loamy-700" : "text-gray-500"
+  `group flex min-h-11 min-w-11 flex-1 select-none flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-[10.5px] font-medium outline-none [-webkit-tap-highlight-color:transparent] focus-visible:ring-2 focus-visible:ring-loamy-700 ${
+    active ? "text-loamy-700" : "text-gray-500"
+  }`;
+
+// Material-style indicator: only the icon sits in a pill, not the whole tab.
+const pillClass = (active) =>
+  `flex h-7 w-14 items-center justify-center rounded-full transition-colors group-active:bg-loamy-100 ${
+    active ? "bg-loamy-100" : ""
   }`;
 
 function useReviewCount(enabled, pathname) {
@@ -76,34 +82,56 @@ export default function MobileNav() {
   return (
     <>
       <nav
-        className="z-40 flex shrink-0 items-stretch gap-1 bg-white/80 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-sm backdrop-blur-md min-[769px]:hidden"
+        className="z-40 flex shrink-0 items-stretch gap-1 border-t border-black/5 bg-white/90 px-2 pt-1.5 pb-[max(0.25rem,env(safe-area-inset-bottom))] backdrop-blur-md min-[769px]:hidden"
         aria-label="Primary"
       >
         <NavLink to="/dashboard" className={({ isActive }) => tabClass(isActive || pathname === "/spending")}>
-          <FontAwesomeIcon icon={faHouse} className="text-xl" />
-          <span>Home</span>
+          {({ isActive }) => (
+            <>
+              <span className={pillClass(isActive || pathname === "/spending")}>
+                <FontAwesomeIcon icon={faHouse} className="text-base" />
+              </span>
+              <span>Home</span>
+            </>
+          )}
         </NavLink>
         <NavLink to="/chat" className={({ isActive }) => tabClass(isActive)}>
-          <FontAwesomeIcon icon={faComment} className="text-xl" />
-          <span>Chat</span>
+          {({ isActive }) => (
+            <>
+              <span className={pillClass(isActive)}>
+                <FontAwesomeIcon icon={faComment} className="text-base" />
+              </span>
+              <span>Chat</span>
+            </>
+          )}
         </NavLink>
         <NavLink to="/review-queue" aria-label={reviewLabel} className={({ isActive }) => tabClass(isActive)}>
-          <span className="relative inline-flex">
-            <FontAwesomeIcon icon={faListCheck} className="text-xl" />
-            {reviewCount > 0 && (
-              <span
-                className="absolute -top-2 left-3 min-w-5 rounded-full bg-red-600 px-1.5 text-center text-[10px] font-bold leading-5 text-white"
-                aria-hidden="true"
-              >
-                {reviewCount > 99 ? "99+" : reviewCount}
+          {({ isActive }) => (
+            <>
+              <span className={`relative ${pillClass(isActive)}`}>
+                <FontAwesomeIcon icon={faListCheck} className="text-base" />
+                {reviewCount > 0 && (
+                  <span
+                    className="absolute top-0 right-2 min-w-4 rounded-full bg-red-600 px-1 text-center text-[9px] font-bold leading-4 text-white"
+                    aria-hidden="true"
+                  >
+                    {reviewCount > 99 ? "99+" : reviewCount}
+                  </span>
+                )}
               </span>
-            )}
-          </span>
-          <span>Review</span>
+              <span>Review</span>
+            </>
+          )}
         </NavLink>
         <NavLink to="/invoices" className={({ isActive }) => tabClass(isActive)}>
-          <FontAwesomeIcon icon={faFileInvoiceDollar} className="text-xl" />
-          <span>Invoices</span>
+          {({ isActive }) => (
+            <>
+              <span className={pillClass(isActive)}>
+                <FontAwesomeIcon icon={faFileInvoiceDollar} className="text-base" />
+              </span>
+              <span>Invoices</span>
+            </>
+          )}
         </NavLink>
         <button
           type="button"
@@ -112,7 +140,9 @@ export default function MobileNav() {
           aria-expanded={moreOpen}
           onClick={() => setMoreOpen((open) => !open)}
         >
-          <FontAwesomeIcon icon={faEllipsis} className="text-xl" />
+          <span className={pillClass(moreActive || moreOpen)}>
+            <FontAwesomeIcon icon={faEllipsis} className="text-base" />
+          </span>
           <span>More</span>
         </button>
       </nav>

@@ -653,15 +653,15 @@ const createNewChat = async (title) => {
                 <div className="sidebar-menu">
                     <div className="menu-section">
                         <p className="section-label">Tools</p>
-                        <Link to="/spending" className="menu-item" title={collapsed ? "Spending Analysis" : undefined}>
+                        <Link to="/spending" draggable={false} className="menu-item" title={collapsed ? "Spending Analysis" : undefined}>
                             <FontAwesomeIcon icon={faChartPie} />
                             <span>Spending Analysis</span>
                         </Link>
-                        <Link to="/invoices" className="menu-item" title={collapsed ? "Invoices" : undefined}>
+                        <Link to="/invoices" draggable={false} className="menu-item" title={collapsed ? "Invoices" : undefined}>
                             <FontAwesomeIcon icon={faFileInvoiceDollar} />
                             <span>Invoices</span>
                         </Link>
-                        <Link to="/accounts" className="menu-item" title={collapsed ? "Bank Accounts" : undefined}>
+                        <Link to="/accounts" draggable={false} className="menu-item" title={collapsed ? "Bank Accounts" : undefined}>
                             <FontAwesomeIcon icon={faBuildingColumns} />
                             <span>Bank Accounts</span>
                         </Link>
@@ -733,7 +733,7 @@ const createNewChat = async (title) => {
                 </div>
 
                 <div className="sidebar-bottom">
-                    <Link to="/settings" className="menu-item" title={collapsed ? "Settings" : undefined}>
+                    <Link to="/settings" draggable={false} className="menu-item" title={collapsed ? "Settings" : undefined}>
                         <FontAwesomeIcon icon={faGear} />
                         <span>Settings</span>
                     </Link>
@@ -804,6 +804,7 @@ const createNewChat = async (title) => {
                                     </div>
                                 ))}
                             </div>
+                            <p className="welcome-disclaimer">Loamy AI can make mistakes. Verify important financial decisions.</p>
                         </div>
                     ) : (
                         <>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import "./Dashboard.css";
+import Logo from "./assets/LoamyLogo.png";
 import "./components/ConnectedBanks.css";
 import { useNavigate, Link } from "react-router-dom";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
@@ -440,6 +441,16 @@ const Dashboard = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [connectedAccounts, setConnectedAccounts] = useState([]);
+  const [scrolled, setScrolled] = useState(false);
+
+  // The header fades content out beneath it only once the page has moved.
+  useEffect(() => {
+    const scroller = document.getElementById("app-main") || window;
+    const read = () => setScrolled((scroller === window ? window.scrollY : scroller.scrollTop) > 4);
+    read();
+    scroller.addEventListener("scroll", read, { passive: true });
+    return () => scroller.removeEventListener("scroll", read);
+  }, []);
 
   useEffect(() => {
     fetchConnectedAccounts(getSessionUserId()).then((result) => {
@@ -639,8 +650,9 @@ const Dashboard = () => {
   return (
     <div className="dashboard-container">
       {/* Navigation */}
-      <nav className="dashboard-nav">
+      <nav className={`dashboard-nav${scrolled ? " is-scrolled" : ""}`}>
         <div className="nav-brand">
+          <img src={Logo} alt="" className="nav-brand-mark" />
           <h3>Loamy</h3>
         </div>
         <div className="nav-actions">
@@ -653,8 +665,8 @@ const Dashboard = () => {
             <span>Chat</span>
           </button>
           <ReviewQueueNavButton userId={getSessionUserId()} onClick={() => handleNavigation("/review-queue")} />
-          <button onClick={handleLogout} className="nav-btn logout-btn">
-            <i className="fa-solid fa-right-from-bracket"></i>
+          <button onClick={handleLogout} className="nav-btn logout-btn" aria-label="Log out" title="Log out">
+            <i className="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
           </button>
         </div>
       </nav>
