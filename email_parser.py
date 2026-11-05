@@ -1091,7 +1091,9 @@ def parse_gmail_message_full(msg_data, allowed_bank_slugs=None, user_id=None):
                     break
         
         # Use Smart Mailroom Clerk classification (3-Lane System)
-        classification = ai_classify_email(sender_email, subject, body[:500], has_attachment)
+        classification = ai_classify_email(
+            sender_email, subject, body[:500], has_attachment, is_bulk_mail(headers)
+        )
         
         # LANE C: Marketing Trash - SKIP ENTIRELY
         if classification.get("skip", False):
@@ -1403,7 +1405,28 @@ VERIFIED_VENDOR_DOMAINS = [
 
 
 
-def smart_mailroom_classify(sender_email, subject, body_preview="", has_attachment=False):
+def _subject_keyword_hits(subject_lower, keywords):
+    """Count keywords present as whole words ('receipts' matches 'receipt',
+    but 'bill' no longer matches inside 'billion')."""
+    import re
+    hits = 0
+    for kw in keywords:
+        pattern = r"(?<!\w)" + re.escape(kw) + (r"s?(?!\w)" if kw[-1].isalnum() else "")
+        if re.search(pattern, subject_lower):
+            hits += 1
+    return hits
+
+
+def is_bulk_mail(headers):
+    """True for newsletters/mailing-list mail. Transactional receipts don't
+    normally carry List-Unsubscribe / List-Id / Precedence: bulk headers."""
+    names = {h.get("name", "").lower(): (h.get("value", "") or "").lower() for h in headers or []}
+    if "list-unsubscribe" in names or "list-id" in names:
+        return True
+    return names.get("precedence", "") in ("bulk", "list", "junk")
+
+
+def smart_mailroom_classify(sender_email, subject, body_preview="", has_attachment=False, is_bulk=False):
     """
     SMART MAILROOM CLERK - 3 Lane Classification System
     
@@ -1471,10 +1494,24 @@ def smart_mailroom_classify(sender_email, subject, body_preview="", has_attachme
             }
     
     # ========== LANE B CHECK: Vendor Receipts & Invoices ==========
+    # Newsletters often mention "receipts"/"invoices" in the subject as a topic
+    # ("... yes to TCP receipts"). Without a verified vendor sender they are not
+    # purchase receipts, so the subject-keyword checks below are skipped for them.
+    sender_is_verified_vendor = any(vendor in sender_lower for vendor in VERIFIED_VENDOR_DOMAINS)
+    if is_bulk and not sender_is_verified_vendor:
+        return {
+            "lane": "C",
+            "is_financial": False,
+            "confidence": 0.9,
+            "type": "newsletter",
+            "bank_name": None,
+            "skip": True
+        }
+
     # Check 1: Has PDF attachment (strong indicator of invoice)
     if has_attachment:
         # Check if subject suggests it's a receipt/invoice
-        if any(kw in subject_lower for kw in RECEIPT_SUBJECT_KEYWORDS):
+        if _subject_keyword_hits(subject_lower, RECEIPT_SUBJECT_KEYWORDS) >= 1:
             return {
                 "lane": "B",
                 "is_financial": True,
@@ -1485,7 +1522,7 @@ def smart_mailroom_classify(sender_email, subject, body_preview="", has_attachme
             }
     
     # Check 2: Subject contains strong receipt/invoice keywords
-    receipt_keyword_count = sum(1 for kw in RECEIPT_SUBJECT_KEYWORDS if kw in subject_lower)
+    receipt_keyword_count = _subject_keyword_hits(subject_lower, RECEIPT_SUBJECT_KEYWORDS)
     if receipt_keyword_count >= 1:
         # Verify it's not marketing disguised as receipt
         if marketing_keyword_count == 0:
@@ -1523,12 +1560,12 @@ def smart_mailroom_classify(sender_email, subject, body_preview="", has_attachme
 
 
 
-def ai_classify_email(sender_email, subject, body_preview="", has_attachment=False):
+def ai_classify_email(sender_email, subject, body_preview="", has_attachment=False, is_bulk=False):
     """
     WRAPPER: Calls the Smart Mailroom Clerk system.
     Backwards compatible with existing code.
     """
-    result = smart_mailroom_classify(sender_email, subject, body_preview, has_attachment)
+    result = smart_mailroom_classify(sender_email, subject, body_preview, has_attachment, is_bulk)
     
     # Convert to old format for backwards compatibility
     return {
@@ -2247,48 +2284,34 @@ def extract_amount_from_body(body, subject):
     """Extract amount from email body for receipts/invoices - supports GLOBAL currencies"""
     import re
     
-    # Combine subject and body for searching
+    # URLs and email addresses carry digits (tracking ids, "name43@gmail.com")
+    # that must never be mistaken for money.
     full_text = f"{subject} {body}"
-    
-    # Multiple currency patterns - GLOBAL SUPPORT
+    full_text = re.sub(r'https?://\S+|www\.\S+', ' ', full_text)
+    full_text = re.sub(r'\S+@\S+', ' ', full_text)
+
+    # A number needs at least one digit; the old `[0-9,]+` happily matched a lone comma.
+    num = r'(\d[\d,]*(?:\.\d+)?)'
+    # Currency codes/words must start on a word boundary ("for 43" is not "R 43").
+    start = r'(?<![A-Za-z])'
+
     patterns = [
-        # USD patterns
-        r'\$\s*([0-9,]+\.?\d*)',
-        r'USD\s*([0-9,]+\.?\d*)',
-        r'([0-9,]+\.?\d*)\s*(?:USD|dollars?)',
-        # NGN (Nigeria) patterns
-        r'NGN\s*([0-9,]+\.?\d*)',
-        r'₦\s*([0-9,]+\.?\d*)',
-        # EUR patterns
-        r'€\s*([0-9,]+\.?\d*)',
-        r'EUR\s*([0-9,]+\.?\d*)',
-        # GBP (UK) patterns
-        r'£\s*([0-9,]+\.?\d*)',
-        r'GBP\s*([0-9,]+\.?\d*)',
-        # ZAR (South Africa) patterns
-        r'R\s*([0-9,]+\.?\d*)',
-        r'ZAR\s*([0-9,]+\.?\d*)',
-        # KES (Kenya) patterns
-        r'KES\s*([0-9,]+\.?\d*)',
-        r'Ksh\s*([0-9,]+\.?\d*)',
-        # MUR (Mauritius) patterns
-        r'MUR\s*([0-9,]+\.?\d*)',
-        r'Rs\s*([0-9,]+\.?\d*)',
-        # INR (India) patterns
-        r'₹\s*([0-9,]+\.?\d*)',
-        r'INR\s*([0-9,]+\.?\d*)',
-        # GHS (Ghana) patterns
-        r'GH[Ss₵]\s*([0-9,]+\.?\d*)',
-        r'GHS\s*([0-9,]+\.?\d*)',
-        # Generic total/amount patterns
-        r'total[:\s]*[₦$€£₹]?\s*([0-9,]+\.?\d*)',
-        r'amount[:\s]*\$?\s*([0-9,]+\.?\d*)',
-        r'price[:\s]*\$?\s*([0-9,]+\.?\d*)',
-        r'charged[:\s]*\$?\s*([0-9,]+\.?\d*)',
-        # Google Play pattern
-        r'([0-9,]+\.?\d*)\s*(?:GBP|EUR|USD|NGN)'
+        # Symbols
+        r'\$\s?' + num,
+        r'₦\s?' + num,
+        r'€\s?' + num,
+        r'£\s?' + num,
+        r'₹\s?' + num,
+        r'GH₵\s?' + num,
+        # ISO codes / local abbreviations (case-sensitive, so "R" and "Rs" are not any "r")
+        r'(?-i:' + start + r'(?:USD|NGN|EUR|GBP|ZAR|KES|MUR|INR|GHS)\s?)' + num,
+        r'(?-i:' + start + r'(?:Ksh|KSh|Rs)\.?\s?)' + num,
+        r'(?-i:' + start + r'R)\s?' + r'(\d[\d,]*(?:\.\d{2})\b)',
+        num + r'\s?(?:USD|NGN|EUR|GBP|dollars?)(?![A-Za-z])',
+        # Labelled totals - require a real money-looking figure with decimals or thousands separator
+        r'(?<![A-Za-z])(?:total|amount(?: paid| due)?|price|charged)\s*[:\-]?\s*[₦$€£₹]?\s?(\d[\d,]*\.\d{2})\b',
     ]
-    
+
     for pattern in patterns:
         match = re.search(pattern, full_text, re.IGNORECASE)
         if match:
@@ -2297,9 +2320,9 @@ def extract_amount_from_body(body, subject):
                 amount = float(amount_str)
                 if amount > 0:
                     return amount
-            except:
+            except ValueError:
                 pass
-    
+
     return None
 
 

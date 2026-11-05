@@ -1,37 +1,138 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css');
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/*
+ * Tailwind is loaded without its preflight: the older page stylesheets still
+ * depend on the browser defaults. Layer order matters because un-layered CSS
+ * always beats layered CSS, so the legacy resets below live inside @layer base.
+ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@theme {
+  --font-sans: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+
+  --color-loamy-950: #0c3b0c;
+  --color-loamy-800: #1b5e20;
+  --color-loamy-700: #2e7d32;
+  --color-loamy-100: #e8f5e9;
+  --color-canvas: #f7f5ef;
+
+  --animate-sheet-up: sheet-up 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-fade-in: fade-in 0.18s ease-out;
+
+  @keyframes sheet-up {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+}
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  button {
+    font-family: inherit;
+  }
+
+  img {
+    max-width: 100%;
+  }
+}
+
+/* ---------- Native physics ---------- */
+html,
+body,
+#root {
+  height: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: pan-y;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-font-smoothing: antialiased;
 }
 
 body {
   font-family: 'Poppins', sans-serif;
-  background-color: #fafafa;
+  background-color: #f7f5ef;
   color: #333;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
-a {
-  text-decoration: none;
-  color: inherit;
+/* Things people genuinely need to type into or copy stay selectable. */
+input,
+textarea,
+[contenteditable="true"],
+.selectable {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
 }
 
-button {
-  font-family: inherit;
+/* No web scrollbars anywhere; content still scrolls. */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-html {
-  -webkit-text-size-adjust: 100%;
+*::-webkit-scrollbar {
+  display: none;
 }
 
-body {
-  overflow-x: hidden;
+button,
+a,
+select,
+[role="button"] {
+  touch-action: manipulation;
 }
 
-img {
-  max-width: 100%;
+/* Tactile press feedback for legacy buttons. Elements that already use a
+   Tailwind active:scale-* utility are excluded so they don't shrink twice. */
+button:not(:disabled):not([class*="active:scale"]),
+[role="button"]:not([class*="active:scale"]) {
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+
+button:not(:disabled):not([class*="active:scale"]):active,
+[role="button"]:not([class*="active:scale"]):active {
+  transform: scale(0.97);
+  opacity: 0.9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):active,
+  [role="button"]:active {
+    transform: none;
+  }
+}
+
+/* The shell's scroll area. Legacy pages ask for min-height: 100vh, which on
+   a phone is taller than the space between header and tab bar; ask for the
+   scroll area's own height instead. */
+#app-main {
+  -webkit-overflow-scrolling: touch;
+}
+
+#app-main > * {
+  min-height: 100%;
 }
 
 @media (max-width: 768px) {
@@ -40,11 +141,5 @@ img {
   select,
   textarea {
     font-size: 16px !important;
-  }
-
-  button,
-  a,
-  select {
-    touch-action: manipulation;
   }
 }

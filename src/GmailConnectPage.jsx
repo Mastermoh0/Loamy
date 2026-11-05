@@ -5,7 +5,6 @@ import {
     faArrowLeft, faEnvelope, faEnvelopeOpen, faReceipt, faCalendarCheck,
     faBuilding, faFile, faShieldHalved, faRotate, faPlug
 } from "@fortawesome/free-solid-svg-icons";
-import "./GmailConnectPage.css";
 import { isRealUserId, waitForServerSync } from "./services/activitySyncService";
 import {
     APP_CALLBACK_URI,
@@ -437,18 +436,6 @@ const GmailConnectPage = () => {
         return symbols[currency] || currency || "$";
     };
 
-    const getEmailTypeClass = (type) => {
-        const classes = {
-            receipt: "type-receipt",
-            payment: "type-payment",
-            bill: "type-bill",
-            subscription: "type-subscription",
-            bank: "type-bank",
-            invoice: "type-invoice"
-        };
-        return classes[type] || "";
-    };
-
     const features = [
         {
             icon: faReceipt,
@@ -492,148 +479,174 @@ const GmailConnectPage = () => {
         );
     }
 
+    const press = "transition-transform active:scale-[0.98]";
+    const typeTone = {
+        receipt: "bg-loamy-100 text-loamy-700",
+        payment: "bg-blue-50 text-blue-700",
+        bill: "bg-red-50 text-red-700",
+        subscription: "bg-purple-50 text-purple-700",
+        invoice: "bg-amber-50 text-amber-700",
+    };
+
     return (
-        <div className="gmail-container">
-            {/* Header */}
-            <header className="gmail-header">
+        <div className="flex h-full min-h-0 flex-col bg-canvas font-sans">
+            <header className="z-10 flex shrink-0 items-center gap-1 bg-white/80 px-2 pb-2 pt-[calc(env(safe-area-inset-top)+0.5rem)] shadow-sm backdrop-blur-md">
                 <button
                     type="button"
-                    className="back-btn"
                     aria-label="Go back"
                     onClick={() => navigate(window.history.length > 1 ? -1 : "/dashboard")}
+                    className={`flex size-11 shrink-0 items-center justify-center rounded-2xl text-loamy-800 ${press}`}
                 >
                     <FontAwesomeIcon icon={faArrowLeft} />
-                    <span>Back</span>
                 </button>
-                <h1>Gmail Integration</h1>
+                <h1 className="min-w-0 flex-1 truncate text-lg font-semibold text-loamy-800">Gmail Integration</h1>
             </header>
 
-            {/* Main Content */}
-            <main className="gmail-content">
-                {/* Connection Status Card */}
-                <div className="status-card">
-                    <div className={`status-icon ${isConnected ? "connected" : "disconnected"}`}>
-                        <FontAwesomeIcon icon={isConnected ? faEnvelopeOpen : faEnvelope} />
-                    </div>
-                    <h2>{isConnected ? "Gmail Connected" : "Gmail Not Connected"}</h2>
-                    <p>
-                        {isConnected 
-                            ? "Your Gmail is connected. Loamy AI can now analyze your financial emails."
-                            : "Connect your Gmail to let Loamy AI analyze your bills, subscriptions, and payment receipts."
-                        }
-                    </p>
-                    
+            <main className="min-h-0 flex-1 overflow-y-auto overscroll-none px-4 pb-8 pt-4">
+                <div className="mx-auto flex max-w-2xl flex-col gap-4">
+                    <section className={`flex flex-col items-center gap-3 rounded-3xl bg-white p-6 text-center shadow-sm ${press}`}>
+                        <div
+                            className={`flex size-16 items-center justify-center rounded-full text-2xl ${
+                                isConnected ? "bg-loamy-100 text-loamy-700" : "bg-gray-100 text-gray-400"
+                            }`}
+                        >
+                            <FontAwesomeIcon icon={isConnected ? faEnvelopeOpen : faEnvelope} />
+                        </div>
+                        <h2 className="text-lg font-semibold text-gray-900">
+                            {isConnected ? "Gmail Connected" : "Gmail Not Connected"}
+                        </h2>
+                        <p className="text-sm leading-relaxed text-gray-500">
+                            {isConnected
+                                ? "Your Gmail is connected. Loamy AI can now analyze your financial emails."
+                                : "Connect your Gmail to let Loamy AI analyze your bills, subscriptions, and payment receipts."}
+                        </p>
+                        {!isConnected && (
+                            <button
+                                type="button"
+                                onClick={handleConnect}
+                                className={`flex min-h-12 w-full items-center justify-center gap-3 rounded-2xl bg-white px-5 text-sm font-medium text-gray-800 shadow-sm ring-1 ring-gray-200 ${press}`}
+                            >
+                                <img src="https://www.google.com/favicon.ico" alt="" className="size-5" />
+                                <span>Connect with Google</span>
+                            </button>
+                        )}
+                    </section>
+
                     {!isConnected && (
-                        <button className="connect-btn" onClick={handleConnect}>
-                            <img 
-                                src="https://www.google.com/favicon.ico" 
-                                alt="Google" 
-                                className="google-icon" 
-                            />
-                            <span>Connect with Google</span>
-                        </button>
-                    )}
-                </div>
-
-                {/* Features Section */}
-                {!isConnected && (
-                    <div className="features-section">
-                        <h3>What Loamy AI Can Access</h3>
-                        <div className="features-grid">
-                            {features.map((feature, i) => (
-                                <div key={i} className="feature-card">
-                                    <div className="feature-icon">
-                                        <FontAwesomeIcon icon={feature.icon} />
+                        <section aria-labelledby="gmail-features">
+                            <h3 id="gmail-features" className="mb-3 px-1 text-base font-semibold text-gray-900">
+                                What Loamy AI Can Access
+                            </h3>
+                            <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2">
+                                {features.map((feature) => (
+                                    <div key={feature.title} className={`rounded-3xl bg-white p-4 shadow-sm ${press}`}>
+                                        <div className="mb-3 flex size-11 items-center justify-center rounded-2xl bg-loamy-100 text-loamy-700">
+                                            <FontAwesomeIcon icon={feature.icon} />
+                                        </div>
+                                        <h4 className="text-sm font-semibold text-gray-900">{feature.title}</h4>
+                                        <p className="mt-1 text-xs leading-relaxed text-gray-500">{feature.description}</p>
                                     </div>
-                                    <h4>{feature.title}</h4>
-                                    <p>{feature.description}</p>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+
+                    {isConnected && (
+                        <>
+                            <section aria-labelledby="gmail-synced" className="flex flex-col gap-3">
+                                <h3 id="gmail-synced" className="px-1 text-base font-semibold text-gray-900">
+                                    Synced Email Data
+                                </h3>
+                                <div className="grid grid-cols-3 gap-3">
+                                    {[
+                                        [emailsScanned, "Emails Scanned"],
+                                        [transactionsFound, "Transactions Found"],
+                                        [billsDetected, "Bills Detected"],
+                                    ].map(([value, label]) => (
+                                        <div
+                                            key={label}
+                                            className={`flex flex-col items-center justify-center gap-1 rounded-3xl bg-white px-2 py-4 text-center shadow-sm ${press}`}
+                                        >
+                                            <span className="text-2xl font-bold text-loamy-800">{value}</span>
+                                            <span className="text-[11px] leading-tight text-gray-500">{label}</span>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
+                            </section>
 
-                {/* Connected State */}
-                {isConnected && (
-                    <div className="connected-section">
-                        <h3>Synced Email Data</h3>
-                        <div className="sync-stats">
-                            <div className="sync-stat">
-                                <span className="stat-number">{emailsScanned}</span>
-                                <span className="stat-label">Emails Scanned</span>
-                            </div>
-                            <div className="sync-stat">
-                                <span className="stat-number">{transactionsFound}</span>
-                                <span className="stat-label">Transactions Found</span>
-                            </div>
-                            <div className="sync-stat">
-                                <span className="stat-number">{billsDetected}</span>
-                                <span className="stat-label">Bills Detected</span>
-                            </div>
-                        </div>
+                            <section aria-labelledby="gmail-recent" className="rounded-3xl bg-white p-4 shadow-sm">
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                    <h4 id="gmail-recent" className="text-base font-semibold text-gray-900">
+                                        Recent Financial Emails
+                                    </h4>
+                                    <button
+                                        type="button"
+                                        onClick={handleRefresh}
+                                        disabled={isLoading}
+                                        className={`flex min-h-11 shrink-0 items-center gap-2 rounded-2xl bg-loamy-100 px-4 text-sm font-medium text-loamy-700 disabled:opacity-60 ${press}`}
+                                    >
+                                        <FontAwesomeIcon icon={faRotate} className={isLoading ? "animate-spin" : ""} />
+                                        <span>{isLoading ? "Refreshing…" : "Refresh"}</span>
+                                    </button>
+                                </div>
 
-                        {/* Email Data List */}
-                        <div className="email-data-section">
-                            <div className="section-header">
-                                <h4>Recent Financial Emails</h4>
-                                <button 
-                                    className={`refresh-btn ${isLoading ? "spinning" : ""}`}
-                                    onClick={handleRefresh}
-                                    disabled={isLoading}
-                                >
-                                    <FontAwesomeIcon icon={faRotate} />
-                                    <span>{isLoading ? "Refreshing..." : "Refresh"}</span>
-                                </button>
-                            </div>
-                            
-                            <div className="email-list">
                                 {emailList.length === 0 ? (
-                                    <div className="email-empty">
-                                        <FontAwesomeIcon icon={faEnvelope} />
-                                        <p>No financial emails found yet. Click refresh to scan.</p>
+                                    <div className="flex flex-col items-center gap-2 py-8 text-center text-sm text-gray-500">
+                                        <FontAwesomeIcon icon={faEnvelope} className="text-2xl text-gray-300" />
+                                        <p>No financial emails found yet. Tap refresh to scan.</p>
                                     </div>
                                 ) : (
-                                    emailList.map((email, i) => (
-                                        <div key={i} className="email-item">
-                                            <div className="email-info">
-                                                <span className="email-sender">{email.sender}</span>
-                                                <span className="email-subject">{email.subject}</span>
-                                            </div>
-                                            <div className="email-meta">
-                                                <span className={`email-type ${getEmailTypeClass(email.type)}`}>
-                                                    {getEmailTypeLabel(email.type)}
-                                                </span>
-                                                {email.amount && (
-                                                    <span className="email-amount">
-                                                        {getCurrencySymbol(email.currency)}{email.amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                    <ul className="flex flex-col gap-2">
+                                        {emailList.map((email, i) => (
+                                            <li key={i} className={`min-w-0 rounded-2xl bg-canvas p-3 ${press}`}>
+                                                <p className="truncate text-sm font-semibold text-gray-900">{email.sender}</p>
+                                                <p className="mt-0.5 line-clamp-2 break-words text-xs text-gray-500">{email.subject}</p>
+                                                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                                    <span
+                                                        className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                                                            typeTone[email.type] || "bg-gray-100 text-gray-600"
+                                                        }`}
+                                                    >
+                                                        {getEmailTypeLabel(email.type)}
                                                     </span>
-                                                )}
-                                                <span className="email-date">{email.date}</span>
-                                            </div>
-                                        </div>
-                                    ))
+                                                    {email.amount && (
+                                                        <span className="text-sm font-semibold text-loamy-800">
+                                                            {getCurrencySymbol(email.currency)}
+                                                            {email.amount.toLocaleString(undefined, {
+                                                                minimumFractionDigits: 2,
+                                                                maximumFractionDigits: 2,
+                                                            })}
+                                                        </span>
+                                                    )}
+                                                    <span className="ml-auto text-xs text-gray-500">{email.date}</span>
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
                                 )}
-                            </div>
+                            </section>
+
+                            <button
+                                type="button"
+                                onClick={handleDisconnect}
+                                className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-red-50 px-5 text-sm font-medium text-red-700 ${press}`}
+                            >
+                                <FontAwesomeIcon icon={faPlug} />
+                                <span>Disconnect Gmail</span>
+                            </button>
+                        </>
+                    )}
+
+                    <aside className="flex gap-3 rounded-3xl bg-loamy-100 p-4 text-loamy-800">
+                        <FontAwesomeIcon icon={faShieldHalved} className="mt-0.5 text-lg" />
+                        <div>
+                            <h4 className="text-sm font-semibold">Your Privacy is Protected</h4>
+                            <p className="mt-1 text-xs leading-relaxed text-loamy-800/80">
+                                Loamy AI only reads emails related to finances (receipts, bills, bank alerts). We never
+                                access personal conversations or store your email content on our servers.
+                            </p>
                         </div>
-
-                        {/* Disconnect Button */}
-                        <button className="disconnect-btn" onClick={handleDisconnect}>
-                            <FontAwesomeIcon icon={faPlug} />
-                            <span>Disconnect Gmail</span>
-                        </button>
-                    </div>
-                )}
-
-                {/* Privacy Notice */}
-                <div className="privacy-notice">
-                    <FontAwesomeIcon icon={faShieldHalved} />
-                    <div>
-                        <h4>Your Privacy is Protected</h4>
-                        <p>
-                            Loamy AI only reads emails related to finances (receipts, bills, bank alerts). 
-                            We never access personal conversations or store your email content on our servers.
-                        </p>
-                    </div>
+                    </aside>
                 </div>
             </main>
         </div>

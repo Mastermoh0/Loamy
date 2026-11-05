@@ -20,13 +20,15 @@
     "@fortawesome/react-fontawesome": "^3.3.1",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.2",
+    "@tailwindcss/vite": "^4.3.4",
     "chart.js": "^4.5.1",
     "react": "^19.2.4",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.15.0",
     "recharts": "^3.8.1",
-    "swr": "^2.5.1"
+    "swr": "^2.5.1",
+    "tailwindcss": "^4.3.4"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
