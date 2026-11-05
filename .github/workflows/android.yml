@@ -27,7 +27,16 @@ jobs:
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL || vars.VITE_API_URL }}
           VITE_API_BASE_URL: ${{ secrets.VITE_API_URL || vars.VITE_API_URL }}
+          VITE_PUBLIC_WEB_URL: ${{ secrets.VITE_PUBLIC_WEB_URL || vars.VITE_PUBLIC_WEB_URL }}
         run: |
+          if [ -z "$VITE_PUBLIC_WEB_URL" ]; then
+            echo "::error::VITE_PUBLIC_WEB_URL is not set. Add your deployed web app URL (e.g. https://your-app.vercel.app) under Settings > Secrets and variables > Actions. Google rejects com.loamy.app:// as an OAuth redirect_uri for Web clients, so the APK must use this https URL and bounce back into the app."
+            exit 1
+          fi
+          case "$VITE_PUBLIC_WEB_URL" in
+            https://*) ;;
+            *) echo "::error::VITE_PUBLIC_WEB_URL must start with https://"; exit 1 ;;
+          esac
           if [ -z "$VITE_API_URL" ]; then
             echo "::error::VITE_API_URL is not set. Add it under Settings > Secrets and variables > Actions (an https:// backend URL), otherwise the APK falls back to http://127.0.0.1:8000, which is the phone itself."
             exit 1
