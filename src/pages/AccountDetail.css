@@ -2,6 +2,12 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ad-main > * {
+  min-width: 0;
 }
 
 .ad-back {
@@ -129,12 +135,22 @@
 
 .ad-metrics {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
 @media (min-width: 900px) {
-  .ad-metrics { grid-template-columns: repeat(4, 1fr); }
+  .ad-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (max-width: 480px) {
+  .ad-metric { padding: 14px 12px; gap: 10px; }
+  .ad-metric-icon { width: 32px; height: 32px; }
+  .ad-metric-value { font-size: 1rem; }
+}
+
+.ad-metric > div {
+  min-width: 0;
 }
 
 .ad-metric {

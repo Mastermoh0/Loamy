@@ -24,10 +24,69 @@ button {
 
 html {
   -webkit-text-size-adjust: 100%;
+  overflow-x: hidden;
+  max-width: 100%;
 }
 
 body {
   overflow-x: hidden;
+  max-width: 100%;
+}
+
+/* Native-app feel on phones: no sideways panning, no pull-to-refresh bounce,
+   no text-selection / long-press menus on UI chrome, no grey tap flash. */
+@media (max-width: 768px) {
+  html,
+  body {
+    overscroll-behavior: none;
+    overflow-x: clip;
+  }
+
+  body {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Things people genuinely need to copy or type into stay selectable. */
+  input,
+  textarea,
+  [contenteditable="true"],
+  .selectable {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+  }
+
+  /* Tactile press feedback instead of web-style hover states. */
+  button:not(:disabled),
+  [role="button"],
+  .email-item,
+  .ad-metric {
+    transition: transform 0.12s ease, opacity 0.12s ease;
+  }
+
+  button:not(:disabled):active,
+  [role="button"]:active {
+    transform: scale(0.97);
+    opacity: 0.9;
+  }
+
+  /* Smooth momentum scrolling inside scroll containers, without chaining to the page. */
+  .email-list,
+  [class*="list"],
+  [class*="scroll"] {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):active {
+    transform: none;
+  }
 }
 
 img {
