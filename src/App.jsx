@@ -26,8 +26,9 @@ export default function App() {
   useGlobalActivitySync({ enabled: true, debounceMs: 2000 });
 
   return (
-    <>
+    <div className="flex h-dvh flex-col overflow-hidden bg-canvas">
     <NativeDeepLinkHandler />
+    <main id="app-main" className="min-h-0 flex-1 overflow-y-auto overscroll-none">
     <Routes>
       {/* Auth Routes */}
       <Route path="/" element={<Login />} />
@@ -50,7 +51,8 @@ export default function App() {
       {/* Aliases for convenience */}
       <Route path="/spending" element={<Dashboard />} />
     </Routes>
+    </main>
     <MobileNav />
-    </>
+    </div>
   );
 }

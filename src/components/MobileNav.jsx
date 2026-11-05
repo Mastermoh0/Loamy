@@ -14,7 +14,6 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { fetchReviewQueue } from "../services/reviewQueueService";
 import { getSessionUserId } from "../services/bankService";
-import "./MobileNav.css";
 
 // Auth, onboarding and Chat go without the tab bar. Chat needs the full height
 // for the composer, and it has its own back button and menu in the header.
@@ -27,6 +26,11 @@ const MORE_LINKS = [
   { to: "/gmail-connect", label: "Gmail", hint: "Sync your bank alert emails", icon: faEnvelope },
   { to: "/settings", label: "Settings", hint: "Account, notifications, data", icon: faGear },
 ];
+
+const tabClass = (active) =>
+  `flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1.5 text-[11px] font-medium transition-transform active:scale-[0.98] ${
+    active ? "bg-loamy-100 text-loamy-700" : "text-gray-500"
+  }`;
 
 function useReviewCount(enabled, pathname) {
   const [count, setCount] = useState(0);
@@ -58,11 +62,6 @@ export default function MobileNav() {
   const reviewCount = useReviewCount(visible, pathname);
 
   useEffect(() => {
-    document.body.classList.toggle("has-mobile-nav", visible);
-    return () => document.body.classList.remove("has-mobile-nav");
-  }, [visible]);
-
-  useEffect(() => {
     if (!moreOpen) return undefined;
     const onKey = (e) => e.key === "Escape" && setMoreOpen(false);
     window.addEventListener("keydown", onKey);
@@ -76,66 +75,76 @@ export default function MobileNav() {
 
   return (
     <>
-      <nav className="mobile-nav" aria-label="Primary">
-        <NavLink to="/dashboard" className={({ isActive }) => `mobile-tab${isActive || pathname === "/spending" ? " active" : ""}`}>
-          <FontAwesomeIcon icon={faHouse} />
+      <nav
+        className="z-40 flex shrink-0 items-stretch gap-1 bg-white/80 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-sm backdrop-blur-md min-[769px]:hidden"
+        aria-label="Primary"
+      >
+        <NavLink to="/dashboard" className={({ isActive }) => tabClass(isActive || pathname === "/spending")}>
+          <FontAwesomeIcon icon={faHouse} className="text-xl" />
           <span>Home</span>
         </NavLink>
-        <NavLink to="/chat" className={({ isActive }) => `mobile-tab${isActive ? " active" : ""}`}>
-          <FontAwesomeIcon icon={faComment} />
+        <NavLink to="/chat" className={({ isActive }) => tabClass(isActive)}>
+          <FontAwesomeIcon icon={faComment} className="text-xl" />
           <span>Chat</span>
         </NavLink>
-        <NavLink
-          to="/review-queue"
-          aria-label={reviewLabel}
-          className={({ isActive }) => `mobile-tab${isActive ? " active" : ""}`}
-        >
-          <span className="mobile-tab-icon">
-            <FontAwesomeIcon icon={faListCheck} />
+        <NavLink to="/review-queue" aria-label={reviewLabel} className={({ isActive }) => tabClass(isActive)}>
+          <span className="relative inline-flex">
+            <FontAwesomeIcon icon={faListCheck} className="text-xl" />
             {reviewCount > 0 && (
-              <span className="mobile-tab-badge" aria-hidden="true">
+              <span
+                className="absolute -top-2 left-3 min-w-5 rounded-full bg-red-600 px-1.5 text-center text-[10px] font-bold leading-5 text-white"
+                aria-hidden="true"
+              >
                 {reviewCount > 99 ? "99+" : reviewCount}
               </span>
             )}
           </span>
           <span>Review</span>
         </NavLink>
-        <NavLink to="/invoices" className={({ isActive }) => `mobile-tab${isActive ? " active" : ""}`}>
-          <FontAwesomeIcon icon={faFileInvoiceDollar} />
+        <NavLink to="/invoices" className={({ isActive }) => tabClass(isActive)}>
+          <FontAwesomeIcon icon={faFileInvoiceDollar} className="text-xl" />
           <span>Invoices</span>
         </NavLink>
         <button
           type="button"
-          className={`mobile-tab${moreActive || moreOpen ? " active" : ""}`}
+          className={tabClass(moreActive || moreOpen)}
           aria-haspopup="dialog"
           aria-expanded={moreOpen}
           onClick={() => setMoreOpen((open) => !open)}
         >
-          <FontAwesomeIcon icon={faEllipsis} />
+          <FontAwesomeIcon icon={faEllipsis} className="text-xl" />
           <span>More</span>
         </button>
       </nav>
 
       {moreOpen && (
-        <div className="mobile-sheet-backdrop" onClick={() => setMoreOpen(false)}>
+        <div
+          className="fixed inset-0 z-50 flex animate-fade-in items-end bg-black/40 min-[769px]:hidden"
+          onClick={() => setMoreOpen(false)}
+        >
           <div
-            className="mobile-sheet"
+            className="w-full animate-sheet-up rounded-t-3xl bg-white px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-sm"
             role="dialog"
             aria-modal="true"
             aria-label="More"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mobile-sheet-grip" aria-hidden="true" />
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-gray-300" aria-hidden="true" />
             {MORE_LINKS.map(({ to, label, hint, icon }) => (
-              <Link key={to} to={to} className="mobile-sheet-link" onClick={() => setMoreOpen(false)}>
-                <span className="mobile-sheet-icon">
+              <Link
+                key={to}
+                to={to}
+                className="flex min-h-14 items-center gap-3 rounded-2xl p-2 transition-transform active:scale-[0.98] active:bg-gray-50"
+                onClick={() => setMoreOpen(false)}
+              >
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-loamy-100 text-loamy-700">
                   <FontAwesomeIcon icon={icon} />
                 </span>
-                <span className="mobile-sheet-text">
-                  <strong>{label}</strong>
-                  <small>{hint}</small>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <strong className="text-sm font-semibold text-gray-900">{label}</strong>
+                  <small className="truncate text-xs text-gray-500">{hint}</small>
                 </span>
-                <FontAwesomeIcon icon={faChevronRight} className="mobile-sheet-chevron" />
+                <FontAwesomeIcon icon={faChevronRight} className="text-xs text-gray-400" />
               </Link>
             ))}
           </div>
