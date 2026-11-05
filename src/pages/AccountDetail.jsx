@@ -29,9 +29,9 @@ function formatDate(value) {
   return d.toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function Metric({ label, value, tone = "text-gray-900", icon, iconTone }) {
+function Metric({ label, value, tone = "text-gray-900", icon, iconTone, surface = "bg-white" }) {
   return (
-    <div className={`flex min-w-0 items-center gap-3 rounded-3xl bg-white p-4 shadow-sm ${press}`}>
+    <div className={`flex min-w-0 items-center gap-3 rounded-3xl p-4 shadow-sm ${surface} ${press}`}>
       {icon && (
         <span className={`flex size-10 shrink-0 items-center justify-center rounded-full ${iconTone}`}>
           <FontAwesomeIcon icon={icon} />
@@ -168,21 +168,48 @@ export default function AccountDetail() {
                   value={formatNaira(analytics.total_credits)}
                   tone="text-loamy-700"
                   icon={faArrowDown}
-                  iconTone="bg-loamy-100 text-loamy-700"
+                  iconTone="bg-emerald-500 text-white"
+                  surface="bg-emerald-50"
                 />
                 <Metric
                   label="Expenses"
                   value={formatNaira(analytics.total_debits)}
-                  tone="text-red-600"
+                  tone="text-rose-600"
                   icon={faArrowUp}
-                  iconTone="bg-red-50 text-red-600"
+                  iconTone="bg-rose-500 text-white"
+                  surface="bg-rose-50"
                 />
                 <Metric
                   label="Net flow"
                   value={formatNaira(analytics.net_flow)}
-                  tone={analytics.net_flow < 0 ? "text-red-600" : "text-loamy-700"}
+                  tone={analytics.net_flow < 0 ? "text-rose-600" : "text-emerald-700"}
+                  surface="bg-amber-50"
                 />
-                <Metric label="Transactions" value={analytics.transaction_count ?? 0} />
+                <Metric
+                  label="Transactions"
+                  value={analytics.transaction_count ?? 0}
+                  tone="text-sky-700"
+                  surface="bg-sky-50"
+                />
+              </section>
+
+              <section
+                aria-label="How totals are calculated"
+                className="rounded-3xl bg-violet-50 p-4 text-sm text-violet-900"
+              >
+                <p className="font-semibold">
+                  Moved between your own accounts: in {formatNaira(analytics.transfers_in)} · out{" "}
+                  {formatNaira(analytics.transfers_out)}
+                </p>
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-violet-700">How are income and expenses calculated?</summary>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-violet-800">
+                    <li>Income is the sum of money-in alerts for this bank. Expenses is the sum of money-out alerts.</li>
+                    <li>Transfers between your own accounts (marked Internal Transfer) are left out of both, so they never count as earning or spending.</li>
+                    <li>A transfer to another of your banks only counts as Internal Transfer once both sides are matched. Until then it shows as an expense here and as income on the other bank.</li>
+                    <li>Balance is the balance printed on your latest alert, not a sum of transactions.</li>
+                  </ul>
+                </details>
               </section>
 
               <section aria-labelledby="ad-tx-title" className="rounded-3xl bg-white p-4 shadow-sm">
@@ -193,7 +220,7 @@ export default function AccountDetail() {
                   <div
                     role="group"
                     aria-label="Filter by type"
-                    className="flex gap-1 rounded-2xl bg-gray-100 p-1"
+                    className="flex gap-1 rounded-2xl bg-loamy-100 p-1"
                   >
                     {TYPE_FILTERS.map((f) => {
                       const active = typeFilter === f.value;
@@ -204,7 +231,7 @@ export default function AccountDetail() {
                           aria-pressed={active}
                           onClick={() => setTypeFilter(f.value)}
                           className={`min-h-11 flex-1 rounded-xl px-3 text-sm font-medium ${press} ${
-                            active ? "bg-white text-loamy-700 shadow-sm" : "text-gray-500"
+                            active ? "bg-loamy-700 text-white shadow-sm" : "text-loamy-800"
                           }`}
                         >
                           {f.label}
@@ -222,29 +249,36 @@ export default function AccountDetail() {
                   </p>
                 ) : (
                   <>
-                    <ul className="flex flex-col min-[769px]:hidden">
+                    <ul className="flex flex-col gap-2 min-[769px]:hidden">
                       {transactions.map((tx) => {
                         const isCredit = tx.type === "credit";
+                        const isTransfer = tx.category === "Internal Transfer";
                         const description = tx.merchant || tx.description || tx.raw_subject || "Transaction";
+                        const surface = isTransfer ? "bg-violet-50" : isCredit ? "bg-emerald-50" : "bg-rose-50";
+                        const badge = isTransfer ? "bg-violet-500" : isCredit ? "bg-emerald-500" : "bg-rose-500";
+                        const amountTone = isTransfer ? "text-violet-700" : isCredit ? "text-emerald-700" : "text-rose-600";
                         return (
-                          <li key={tx.id} className="border-t border-gray-100 first:border-t-0">
+                          <li key={tx.id}>
                             <button
                               type="button"
                               onClick={() => setSelectedTx(tx)}
                               aria-label={`View details: ${description}`}
-                              className={`grid min-h-14 w-full grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 rounded-2xl px-1 py-3 text-left ${press} active:bg-gray-50`}
+                              className={`grid min-h-14 w-full grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-0.5 rounded-2xl px-3 py-3 text-left ${surface} ${press}`}
                             >
-                              <span className="truncate text-sm font-medium text-gray-900">{description}</span>
                               <span
-                                className={`text-sm font-semibold ${isCredit ? "text-loamy-700" : "text-red-600"}`}
+                                className={`row-span-2 flex size-9 items-center justify-center rounded-full text-sm text-white ${badge}`}
                               >
+                                <FontAwesomeIcon icon={isCredit ? faArrowDown : faArrowUp} />
+                              </span>
+                              <span className="truncate text-sm font-medium text-gray-900">{description}</span>
+                              <span className={`text-sm font-semibold ${amountTone}`}>
                                 {isCredit ? "+" : "−"}
                                 {formatNaira(tx.amount ?? tx.transaction_amount ?? 0)}
                               </span>
-                              <span className="truncate text-xs text-gray-500">
+                              <span className="truncate text-xs text-gray-600">
                                 {tx.category || "Uncategorized"}
                               </span>
-                              <span className="text-xs text-gray-500">{shortDate(tx.date)}</span>
+                              <span className="text-right text-xs text-gray-600">{shortDate(tx.date)}</span>
                             </button>
                           </li>
                         );

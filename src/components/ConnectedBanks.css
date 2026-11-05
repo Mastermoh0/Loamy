@@ -62,5 +62,5 @@
 .connected-bank-arrow { color: #9aa49b; margin-left: 4px; }
 .connected-banks-empty { display: flex; align-items: center; justify-content: space-between; gap: 14px; color: #6f786f; }
 .connected-banks-empty p { margin: 0; }
-@media (max-width: 650px) { .connected-banks-empty { align-items: flex-start; flex-direction: column; } .connected-banks-header { align-items: flex-start; gap: 10px; flex-direction: column; } .connected-bank-balance { display: none; } }
+@media (max-width: 650px) { .connected-banks-empty { align-items: flex-start; flex-direction: column; } .connected-banks-header { align-items: flex-start; gap: 10px; flex-direction: column; } .connected-bank-card { flex-wrap: wrap; } .connected-bank-balance { order: 5; flex-basis: 100%; flex-direction: row; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 10px; background: #eaf6ec; } .connected-bank-balance strong { font-size: 1.05rem; } .connected-bank-balance small { order: -1; color: #2e7d32; font-weight: 600; } }
 
