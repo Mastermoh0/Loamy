@@ -8,7 +8,7 @@ import sqlite3
 import psycopg
 from psycopg.rows import dict_row
 
-SCHEMA_VERSION = '002_receipt_extraction'
+SCHEMA_VERSION = '003_supplier_whatsapp'
 
 
 class Row(dict):

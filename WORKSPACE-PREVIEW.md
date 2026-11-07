@@ -1,5 +1,13 @@
 # Local business workspace
 
+## Supplier bills and WhatsApp receipts (7 November 2026)
+
+Open **Supplier bills**, choose a location and import a fictional invoice (JPEG/PNG/PDF, 2 MB max). Extract optional suggestions, confirm supplier/reference/description/category/total/issue/due dates, then Save unpaid bill. This changes bills owed only. Record or confirm the matching expense debit in **Financial records**, then link all/part of that debit to the bill; no second expense is created. Payment corrections retain reversal history. Owner overview shows current supplier payables separately from cash flow and customer balances.
+
+Under **Expenses & receipts**, expand **WhatsApp receipt inbox**. Real provider access is off until Samuel configures it. In the local preview, expand **Simulate an incoming receipt locally**, choose a fictional receipt and add its caption. Open its draft, optionally extract fields, confirm/edit them and submit for independent review. The source stays labelled as a simulation and the original file stays attached. No message is sent or real sender verified. Generate distinct ignored fixtures with `python scripts/create_receipt_test_fixture.py` (`fictional-supplier-invoice.png` and `fictional-whatsapp-receipt.png` under `.local-data/`).
+
+For real signed WhatsApp events, sender linking and a supervised receipt worker, follow `deploy/ENTERPRISE-RUNBOOK.md`. Do not expose this loopback preview publicly. Group capture is disabled. Supplier imports, WhatsApp delivery, expense approval and paid ledger posting are separate actions.
+
 ## Owner overview and offline receipt reading (7 November 2026)
 
 Owners can open **Owner overview** for combined/per-location recorded activity and current invoice balances. Date filters affect posted cash movement and orders; receivables and review queues are current across dates. Recorded account credits are not live bank balances.

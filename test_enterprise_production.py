@@ -61,6 +61,10 @@ class PostgresReleaseTests(unittest.TestCase):
             admin.execute('INSERT INTO public.loamy_rehearsal_sentinel VALUES (1) ON CONFLICT DO NOTHING')
             admin.execute((ROOT / 'scripts/sql/enterprise/001_enterprise.sql').read_text())
             admin.execute((ROOT / 'scripts/sql/enterprise/002_receipt_extraction.sql').read_text())
+            admin.execute("INSERT INTO enterprise.businesses VALUES ('upgrade-sentinel','Existing upgrade fixture',0)")
+            admin.execute((ROOT / 'scripts/sql/enterprise/003_supplier_whatsapp.sql').read_text())
+            self.assertEqual(admin.execute("SELECT name FROM enterprise.businesses WHERE id='upgrade-sentinel'").fetchone()[0], 'Existing upgrade fixture')
+            admin.execute("DELETE FROM enterprise.businesses WHERE id='upgrade-sentinel'")
         self.env = patch.dict(os.environ, ProductionConfigTests().settings(LOAMY_WORKSPACE_WEB_ORIGIN='https://workspace.example.test',
                             LOAMY_WORKSPACE_API_ORIGIN='https://workspace.example.test', LOAMY_WORKSPACE_DATABASE_URL=self.app_dsn))
         self.env.start()
@@ -204,6 +208,77 @@ class PostgresReleaseTests(unittest.TestCase):
         self.assertEqual(dashboard.status_code, 200, dashboard.text)
         self.assertEqual((dashboard.json()['totals']['outflow'], dashboard.json()['totals']['outstanding']), ('1000.10', '50000.00'))
         self.assertEqual(staff.get(f'/enterprise-api/businesses/{self.bid}/owner-dashboard').status_code, 403)
+
+
+    def test_postgres_supplier_split_concurrency_and_immutable_bill(self):
+        import base64
+        from io import BytesIO
+        from PIL import Image
+        import psycopg
+        self.fixture()
+        today = datetime.now(timezone(timedelta(hours=1))).date().isoformat()
+        bills = self.base + '/supplier-bills'; ids = []
+        for index, color in enumerate(['green', 'red']):
+            out = BytesIO(); Image.new('RGB', (20, 20), color).save(out, format='PNG')
+            response = self.owner.post(bills, json={'vendor': 'Rehearsal Supplier', 'reference': f'SUP-{index}', 'description': 'Fictional office invoice', 'category': 'Supplies', 'amount': '50000.00', 'issued_on': today, 'due_on': today, 'receipt_base64': base64.b64encode(out.getvalue()).decode(), 'idempotency_key': secrets.token_hex(16)})
+            self.assertEqual(response.status_code, 201, response.text); ids.append(response.json()['id'])
+        ledger = f'/enterprise-api/businesses/{self.bid}/financial-records'
+        debit = self.owner.post(ledger, json={'location_id': self.lid, 'direction': 'expense', 'amount': '45000.00', 'occurred_on': today, 'description': 'Fictional supplier debit', 'category': 'Supplies', 'idempotency_key': secrets.token_hex(16)})
+        self.assertEqual(debit.status_code, 201, debit.text)
+        def allocate(bill):
+            client = self.client(); client.cookies.update(self.owner.cookies)
+            return client.post(f'{bills}/{bill}/payments', json={'record_id': debit.json()['id'], 'amount': '45000.00', 'reason': 'Rehearsal concurrency check', 'idempotency_key': secrets.token_hex(16)})
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            responses = list(pool.map(allocate, ids))
+        self.assertEqual(sorted(r.status_code for r in responses), [201, 409], [r.text for r in responses])
+        self.assertEqual(self.owner.get(bills).json()['outstanding'], '55000.00')
+        self.assertEqual(self.owner.get(ledger).json()['count'], 1)
+        with psycopg.connect(self.app_dsn, autocommit=True) as conn:
+            with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+                conn.execute('UPDATE enterprise.supplier_bills SET amount_minor=1')
+        self.assertEqual(self.owner.get(f'/enterprise-api/businesses/{self.bid}/owner-dashboard').json()['totals']['payables'], '55000.00')
+
+    def test_postgres_whatsapp_signed_intake_worker_and_submission(self):
+        import base64, hashlib, hmac, json
+        from io import BytesIO
+        from PIL import Image
+        import psycopg
+        from workspace_whatsapp import WhatsAppSettings, WEBHOOK
+        self.fixture()
+        settings = WhatsAppSettings('fake-secret-12345678901234567890', 'fake-verify-12345678901234567890', 'fake-token', 'v99.0', {'1234567890': self.bid})
+        from enterprise_production import create_app
+        cookies = self.owner.cookies
+        with patch('workspace_whatsapp.WhatsAppSettings.from_env', return_value=settings):
+            self.app = create_app()
+        self.owner = self.client(); self.owner.cookies.update(cookies)
+        staff = self.client(); self.register(staff, 'whatsapp-staff@example.test')
+        invite = self.owner.post(f'/enterprise-api/businesses/{self.bid}/invitations', json={'email': 'whatsapp-staff@example.test', 'role': 'staff', 'location_id': self.lid}).json()
+        staff.post('/enterprise-api/invitations/accept', json={'token': invite['token']})
+        inbox = self.base + '/whatsapp'
+        code = staff.post(inbox + '/link-code', json={'phone_id': '1234567890'}); self.assertEqual(code.status_code, 200, code.text)
+        def deliver(message):
+            raw = json.dumps({'object': 'whatsapp_business_account', 'entry': [{'changes': [{'field': 'messages', 'value': {'messaging_product': 'whatsapp', 'metadata': {'phone_number_id': '1234567890'}, 'messages': [message]}}]}]}).encode()
+            return TestClient(self.app, base_url='https://workspace.example.test').post(WEBHOOK, content=raw, headers={'x-hub-signature-256': 'sha256=' + hmac.new(settings.secret.encode(), raw, hashlib.sha256).hexdigest()})
+        self.assertEqual(deliver({'id': 'wamid.link', 'from': '2348000000000', 'type': 'text', 'text': {'body': code.json()['message']}}).status_code, 200)
+        out = BytesIO(); Image.new('RGB', (20, 20), 'blue').save(out, format='PNG'); raw = out.getvalue()
+        import time
+        response = deliver({'id': 'wamid.receipt', 'from': '2348000000000', 'timestamp': str(int(time.time())), 'type': 'image', 'image': {'id': '98765', 'mime_type': 'image/png', 'sha256': base64.b64encode(hashlib.sha256(raw).digest()).decode()}})
+        self.assertEqual(response.status_code, 200, response.text)
+        with patch('workspace_whatsapp.download_media', return_value=(raw, 'image/png', 'png')):
+            self.assertTrue(self.app.state.process_whatsapp_message())
+        message = staff.get(inbox).json()['messages'][0]
+        self.assertEqual(message['status'], 'ready')
+        today = datetime.now(timezone(timedelta(hours=1))).date().isoformat()
+        payload = {'vendor': 'Fictional Store', 'purpose': 'Fictional staff paper', 'category': 'Supplies', 'amount': '1000.10', 'occurred_on': today, 'receipt_base64': base64.b64encode(raw).decode(), 'whatsapp_message_id': message['id'], 'idempotency_key': secrets.token_hex(16)}
+        result = staff.post(self.base + '/expenses', json=payload); self.assertEqual(result.status_code, 201, result.text)
+        self.assertEqual(staff.get(inbox).json()['messages'][0]['status'], 'submitted')
+        self.assertEqual(self.owner.get(self.base + '/expenses').json()['expenses'][0]['whatsapp_source']['provider_id'], 'wamid.receipt')
+        self.assertEqual(self.owner.post(inbox + '/preview-message', json={'receipt_base64': payload['receipt_base64'], 'idempotency_key': secrets.token_hex(16)}).status_code, 404)
+        with psycopg.connect(self.app_dsn, autocommit=True) as conn:
+            conn.execute("UPDATE enterprise.whatsapp_messages SET status='queued'")
+            with self.assertRaises(psycopg.errors.RaiseException):
+                conn.execute("UPDATE enterprise.whatsapp_messages SET receipt='tampered'::bytea")
+            conn.execute("UPDATE enterprise.whatsapp_messages SET status='submitted'")
 
 
 if __name__ == '__main__':

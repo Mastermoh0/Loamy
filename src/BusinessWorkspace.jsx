@@ -10,6 +10,7 @@ import WorkspaceOrders from './WorkspaceOrders';
 import WorkspacePayments from './WorkspacePayments';
 import WorkspaceExpenses from './WorkspaceExpenses';
 import WorkspaceOwner from './WorkspaceOwner';
+import WorkspaceSuppliers from './WorkspaceSuppliers';
 
 const ROLE_NAMES = { owner: 'Owner', manager: 'Manager', finance: 'Finance', front_desk: 'Front desk', staff: 'Staff' };
 const ROLE_NOTES = {
@@ -197,11 +198,12 @@ export default function BusinessWorkspace() {
               <button aria-current={tab === 'locations' ? 'page' : undefined} onClick={() => { setTab('locations'); setInvitationLink(''); }}><FontAwesomeIcon icon={faLocationDot} />Locations</button>
               {canFinance && <button aria-current={tab === 'finances' ? 'page' : undefined} onClick={() => { setFinanceLocation(''); setTab('finances'); }}>Financial records</button>}
               {canFinance && <button aria-current={tab === 'payments' ? 'page' : undefined} onClick={() => setTab('payments')}>Payments & balances</button>}
+              {canFinance && <button aria-current={tab === 'suppliers' ? 'page' : undefined} onClick={() => setTab('suppliers')}>Supplier bills</button>}
               <button aria-current={tab === 'expenses' ? 'page' : undefined} onClick={() => setTab('expenses')}>Expenses & receipts</button>
               {canOrders && <button aria-current={tab === 'orders' ? 'page' : undefined} onClick={() => setTab('orders')}>Services & orders</button>}
               {owner && <button aria-current={tab === 'team' ? 'page' : undefined} onClick={() => setTab('team')}><FontAwesomeIcon icon={faUsers} />Team & access</button>}
             </nav>
-            {tab === 'overview' && owner ? <WorkspaceOwner key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'expenses' ? <WorkspaceExpenses key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'payments' && canFinance ? <WorkspacePayments key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'orders' && canOrders ? <WorkspaceOrders key={selected} businessId={selected} role={workspace.role} locations={workspace.locations} /> : tab === 'finances' && canFinance ? <WorkspaceFinances key={`${selected}-${financeLocation}`} businessId={selected} role={workspace.role} locations={workspace.locations} initialLocation={financeLocation}
+            {tab === 'suppliers' && canFinance ? <WorkspaceSuppliers key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'overview' && owner ? <WorkspaceOwner key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'expenses' ? <WorkspaceExpenses key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'payments' && canFinance ? <WorkspacePayments key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'orders' && canOrders ? <WorkspaceOrders key={selected} businessId={selected} role={workspace.role} locations={workspace.locations} /> : tab === 'finances' && canFinance ? <WorkspaceFinances key={`${selected}-${financeLocation}`} businessId={selected} role={workspace.role} locations={workspace.locations} initialLocation={financeLocation}
               onChanged={() => refresh(selected).catch((failure) => setError(failure.message))} /> : tab === 'locations' || !owner ? <section aria-labelledby="locations-title">
               <div className="workspace-section-heading"><div><h2 id="locations-title">{owner ? 'Business locations' : 'Your location'}</h2><p>{owner ? 'Each location will keep its own orders and financial activity.' : 'Your access is limited to this location.'}</p></div>
                 {owner && <button className="workspace-secondary" onClick={() => setAddingLocation(!addingLocation)}><FontAwesomeIcon icon={faPlus} /> {addingLocation ? 'Close form' : 'Add location'}</button>}

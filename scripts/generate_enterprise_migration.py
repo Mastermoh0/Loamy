@@ -1,4 +1,4 @@
-"""Generate the reviewed initial private PostgreSQL schema without reading preview data."""
+"""Reproduce initial and additive intake schemas from an empty database, never user data."""
 import os
 from pathlib import Path
 import re
@@ -22,7 +22,8 @@ def generate():
         create_app(path)
         with closing(sqlite3.connect(path)) as connection:
             # Freeze migration 001; later additive tables belong in migration 002.
-            objects = connection.execute("SELECT sql FROM sqlite_master WHERE type IN ('table','index') AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND tbl_name NOT IN ('receipt_extractions','expense_extractions') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END,rowid").fetchall()
+            objects = connection.execute("SELECT sql FROM sqlite_master WHERE type IN ('table','index') AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND tbl_name NOT IN ('receipt_extractions','expense_extractions','supplier_bills','supplier_payments','whatsapp_challenges','whatsapp_senders','whatsapp_messages') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END,rowid").fetchall()
+            intake = connection.execute("SELECT sql FROM sqlite_master WHERE type IN ('table','index') AND sql IS NOT NULL AND tbl_name IN ('supplier_bills','supplier_payments','whatsapp_challenges','whatsapp_senders','whatsapp_messages') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END,rowid").fetchall()
     statements = []
     for (sql,) in objects:
         sql = re.sub(r'\bINTEGER\b', 'BIGINT', sql, flags=re.I)
@@ -93,6 +94,44 @@ COMMIT;
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(prefix + '\n\n'.join(statements) + '\n' + suffix, encoding='utf-8', newline='\n')
     print('Generated scripts/sql/enterprise/001_enterprise.sql (no data)')
+    forward = []
+    for (sql,) in intake:
+        for old, new in [('INTEGER', 'BIGINT'), ('REAL', 'DOUBLE PRECISION'), ('BLOB', 'BYTEA')]:
+            sql = re.sub(r'\b' + old + r'\b', new, sql, flags=re.I)
+        forward.append(sql + ';')
+    upgrade = '''-- Additive upgrade after 002; apply as migration owner, never runtime role.
+BEGIN;
+SET LOCAL search_path TO enterprise, pg_catalog;
+'''
+    grants = '''
+ALTER TABLE supplier_bills ADD UNIQUE(id,business_id,location_id);
+ALTER TABLE supplier_bills ADD FOREIGN KEY(location_id,business_id) REFERENCES locations(id,business_id);
+ALTER TABLE supplier_payments ADD FOREIGN KEY(location_id,business_id) REFERENCES locations(id,business_id);
+ALTER TABLE supplier_payments ADD FOREIGN KEY(bill_id,business_id,location_id) REFERENCES supplier_bills(id,business_id,location_id);
+ALTER TABLE supplier_payments ADD FOREIGN KEY(record_id,business_id,location_id) REFERENCES financial_records(id,business_id,location_id);
+ALTER TABLE whatsapp_challenges ADD FOREIGN KEY(location_id,business_id) REFERENCES locations(id,business_id);
+ALTER TABLE whatsapp_senders ADD FOREIGN KEY(location_id,business_id) REFERENCES locations(id,business_id);
+ALTER TABLE whatsapp_messages ADD FOREIGN KEY(location_id,business_id) REFERENCES locations(id,business_id);
+REVOKE ALL ON supplier_bills,supplier_payments,whatsapp_challenges,whatsapp_senders,whatsapp_messages FROM PUBLIC;
+GRANT SELECT,INSERT ON supplier_bills,supplier_payments,whatsapp_challenges,whatsapp_senders,whatsapp_messages TO loamy_enterprise_app;
+GRANT UPDATE(status,void_reason,voided_at) ON supplier_bills TO loamy_enterprise_app;
+GRANT UPDATE(reversed_at,reversed_by,reverse_reason) ON supplier_payments TO loamy_enterprise_app;
+GRANT UPDATE(used_at) ON whatsapp_challenges TO loamy_enterprise_app;
+GRANT UPDATE(actor_id,location_id,linked_at,revoked_at) ON whatsapp_senders TO loamy_enterprise_app;
+GRANT UPDATE(status,attempts,lease_until,receipt,mime,extension,receipt_hash,error,expense_id,discard_reason) ON whatsapp_messages TO loamy_enterprise_app;
+CREATE FUNCTION preserve_whatsapp_evidence() RETURNS trigger LANGUAGE plpgsql SET search_path=enterprise,pg_catalog AS $guard$
+BEGIN
+  IF OLD.receipt IS NOT NULL AND (NEW.receipt IS DISTINCT FROM OLD.receipt OR NEW.receipt_hash IS DISTINCT FROM OLD.receipt_hash OR NEW.mime IS DISTINCT FROM OLD.mime OR NEW.extension IS DISTINCT FROM OLD.extension) THEN
+    RAISE EXCEPTION 'WhatsApp receipt evidence is immutable';
+  END IF;
+  RETURN NEW;
+END $guard$;
+CREATE TRIGGER whatsapp_evidence_immutable BEFORE UPDATE ON whatsapp_messages FOR EACH ROW EXECUTE FUNCTION preserve_whatsapp_evidence();
+INSERT INTO schema_migrations(version) VALUES ('003_supplier_whatsapp');
+COMMIT;
+'''
+    (target.parent / '003_supplier_whatsapp.sql').write_text(upgrade + '\n\n'.join(forward) + '\n' + grants, encoding='utf-8', newline='\n')
+    print('Generated scripts/sql/enterprise/003_supplier_whatsapp.sql (no data)')
 
 
 if __name__ == '__main__':

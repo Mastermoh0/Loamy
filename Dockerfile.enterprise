@@ -14,8 +14,9 @@ COPY requirements-production.lock ./
 RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng poppler-utils && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir -r requirements-production.lock && useradd --uid 10001 --create-home workspace
 COPY enterprise_preview.py enterprise_production.py enterprise_static.py workspace_*.py ./
+COPY scripts/process_whatsapp_inbox.py ./scripts/process_whatsapp_inbox.py
 COPY --from=frontend /app/dist ./dist
 USER workspace
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health/ready',timeout=3)"
-CMD ["python", "-m", "uvicorn", "enterprise_production:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080", "--limit-concurrency", "40", "--no-server-header"]
+CMD ["python", "-m", "uvicorn", "enterprise_production:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080", "--limit-concurrency", "40", "--no-server-header", "--no-access-log"]

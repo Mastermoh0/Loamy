@@ -4,6 +4,10 @@ Status: **production candidate for owner-controlled staging; not approved for li
 
 This work prepares the new business workflows without accessing Samuel's database, sending customer messages, changing DNS or deploying to a public host. It does not certify the original personal/Gmail backend or Android build as production-ready.
 
+### Supplier/WhatsApp update (7 November 2026)
+
+Current release adds supplier invoice imports/liabilities with partial/split matching to existing expense debits, plus a private WhatsApp receipt inbox with sender linking, signed webhooks, durable media queue and supervised worker. Live WhatsApp remains disabled without complete operator configuration; provider tests are simulated and group capture is disabled/unverified. Apply forward migration `003_supplier_whatsapp.sql` after 002; runtime requires 003 and the private schema has 33 tables. **60 backend tests passed with no skips**, including real offline OCR and TLS PostgreSQL. The new 33-table recovery comparison and restricted production-container checks passed. See section 13 of `SAMUEL-PRODUCTION-HANDOFF.md` and the runbook for behavior, configuration, retention and real-provider acceptance gates. Earlier evidence below is historical.
+
 ### Owner overview and receipt extraction update (7 November 2026)
 
 The candidate now includes an owner-only consolidated overview and offline receipt extraction into editable, independently reviewed expense drafts. Apply the additive `002_receipt_extraction.sql` after unchanged migration 001; runtime requires 002. See section 12 of `SAMUEL-PRODUCTION-HANDOFF.md` for behavior, limits and newest validation: **47 tests passed, no skips**, with real OCR and PostgreSQL enabled; lint/build and desktop/mobile browser checks passed. The evidence table below records the earlier foundation rehearsal. The new rehearsal restored all 28 tables and verified actual OCR in the non-root/read-only production container. No live production integration has been performed.
@@ -67,7 +71,7 @@ docker compose --env-file .local-data/postgres-test.env -f compose.enterprise-te
 Build with `VITE_ENTERPRISE_ENABLED=true` and `VITE_ENTERPRISE_ONLY=true`, install/configure the offline receipt tools, then set `LOAMY_RUN_POSTGRES_TESTS=1` and `LOAMY_RUN_OCR_TESTS=1` for:
 
 ```text
-python -m unittest test_workspace_features test_workspace_orders test_workspace_invoices test_workspace_payments test_workspace_expenses test_workspace_owner test_workspace_receipts test_enterprise_production -v
+python -m unittest test_workspace_features test_workspace_orders test_workspace_invoices test_workspace_payments test_workspace_expenses test_workspace_owner test_workspace_receipts test_workspace_suppliers test_workspace_whatsapp test_enterprise_production -v
 python scripts/rehearse_enterprise_restore.py
 docker build -f Dockerfile.enterprise -t loamy-enterprise:rehearsal .
 python scripts/rehearse_enterprise_container.py

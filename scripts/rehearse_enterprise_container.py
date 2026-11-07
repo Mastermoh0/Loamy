@@ -55,6 +55,8 @@ try:
     assert httpx.get(root + '/enterprise-api/config', headers={'Host': 'workspace.example.test'}).status_code == 400
     assert httpx.get(root + '/enterprise-api/config', headers={'Host': 'attacker.example.test'}).status_code == 403
     assert docker('exec', name, 'id', '-u').stdout.strip() == '10001'
+    assert docker('exec', name, 'python', 'scripts/process_whatsapp_inbox.py', '--help').returncode == 0
+    assert docker('exec', name, 'python', 'scripts/process_whatsapp_inbox.py', '--once', check=False).returncode != 0
     # Verify the packaged reader with the same non-root/read-only runtime, not a mock.
     docker('exec', name, 'python', '-c', '''from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont

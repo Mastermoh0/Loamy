@@ -115,6 +115,8 @@ def install_finances(app, db, verified_user, membership, audit):
             if record['status'] == 'posted':
                 if conn.execute('SELECT id FROM payment_allocations WHERE record_id=? AND reversed_at IS NULL', (record_id,)).fetchone():
                     raise HTTPException(409, 'Reverse payment allocations before voiding this income record')
+                if conn.execute('SELECT id FROM supplier_payments WHERE record_id=? AND reversed_at IS NULL', (record_id,)).fetchone():
+                    raise HTTPException(409, 'Reverse supplier bill allocations before voiding this expense record')
                 conn.execute("UPDATE financial_records SET status='voided',void_reason=?,voided_at=? WHERE id=?", (data.reason, time.time(), record_id))
                 audit(conn, business_id, actor['id'], f'Voided record {record_id}: {data.reason}')
         return {'success': True}

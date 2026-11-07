@@ -19,6 +19,8 @@ from workspace_orders import install_orders
 from workspace_payments import install_payments
 from workspace_expenses import install_expenses
 from workspace_owner import install_owner_dashboard
+from workspace_suppliers import install_suppliers
+from workspace_whatsapp import install_whatsapp, WEBHOOK
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
@@ -205,7 +207,7 @@ def create_app(database_path=None, *, production_settings=None):
         allowed_origins = {production_settings.web_origin} if production else {
             "http://127.0.0.1:5173", "http://localhost:5173", "http://testserver"
         }
-        if request.method not in {"GET", "HEAD", "OPTIONS"} and origin not in allowed_origins:
+        if request.method not in {"GET", "HEAD", "OPTIONS"} and origin not in allowed_origins and request.url.path != WEBHOOK:
             return JSONResponse({"detail": "Open this workspace from its approved site" if production else "Open this workspace from the local Loamy preview"}, status_code=403)
         size = request.headers.get('content-length', '0')
         if not size.isdigit() or int(size) > 3_000_000:
@@ -415,5 +417,7 @@ def create_app(database_path=None, *, production_settings=None):
     install_orders(app, db, verified_user, membership, audit, email.transport, local_preview=not production)
     install_payments(app, db, verified_user, membership, audit)
     install_expenses(app, db, verified_user, membership, audit)
+    install_suppliers(app, db, verified_user, membership, audit)
+    install_whatsapp(app, db, verified_user, membership, audit, local_preview=not production)
     install_owner_dashboard(app, db, verified_user, membership)
     return app

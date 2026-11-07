@@ -34,6 +34,7 @@ class ExpenseInput(BaseModel):
     receipt_base64: str = Field(min_length=8, max_length=2800000)
     idempotency_key: str = Field(min_length=16, max_length=80, pattern=r'^[a-zA-Z0-9_-]+$')
     extraction_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
+    whatsapp_message_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
 
     @field_validator('occurred_on')
     @classmethod
@@ -132,11 +133,16 @@ def install_expenses(app, db, verified_user, membership, audit):
         raw, mime, extension = receipt_bytes(data.receipt_base64)
         digest = hashlib.sha256(raw).hexdigest()
         values = (data.vendor, data.purpose, data.category, int(data.amount * 100), data.occurred_on.isoformat())
-        signature = hashlib.sha256(json.dumps([*values, digest, *([data.extraction_id] if data.extraction_id else [])]).encode()).hexdigest()
+        signature = hashlib.sha256(json.dumps([*values, digest, *([data.extraction_id] if data.extraction_id else []), *([data.whatsapp_message_id] if data.whatsapp_message_id else [])]).encode()).hexdigest()
         return values, raw, mime, extension, digest, signature
 
     def insert_version(conn, eid, revision, data, values):
         fields, raw, mime, extension, digest, signature = values
+        if data.whatsapp_message_id:
+            message = conn.execute('SELECT * FROM whatsapp_messages WHERE id=?', (data.whatsapp_message_id,)).fetchone()
+            expense = conn.execute('SELECT * FROM expense_submissions WHERE id=?', (eid,)).fetchone()
+            if revision != 1 or not message or message['status'] != 'ready' or (message['business_id'], message['location_id'], message['actor_id'], message['receipt_hash']) != (expense['business_id'], expense['location_id'], expense['submitter_id'], digest):
+                raise HTTPException(422, 'WhatsApp evidence must be your unsubmitted receipt at this location')
         if data.extraction_id:
             extraction = conn.execute('SELECT * FROM receipt_extractions WHERE id=?', (data.extraction_id,)).fetchone()
             expense = conn.execute('SELECT business_id,location_id,submitter_id FROM expense_submissions WHERE id=?', (eid,)).fetchone()
@@ -145,11 +151,15 @@ def install_expenses(app, db, verified_user, membership, audit):
         conn.execute('INSERT INTO expense_versions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)', (eid, revision, *fields, raw, mime, extension, digest, time.time(), data.idempotency_key, signature))
         if data.extraction_id:
             conn.execute('INSERT INTO expense_extractions VALUES (?,?,?)', (eid, revision, data.extraction_id))
+        if data.whatsapp_message_id:
+            conn.execute("UPDATE whatsapp_messages SET status='submitted',expense_id=? WHERE id=?", (eid, data.whatsapp_message_id))
 
     def public(conn, row):
         current = conn.execute('SELECT * FROM expense_versions WHERE expense_id=? AND revision=?', (row['id'], row['revision'])).fetchone()
         result = {**dict(row), **{key: current[key] for key in ['vendor', 'purpose', 'category', 'occurred_on', 'mime', 'receipt_hash']}, 'amount': money(current['amount_minor'])}
         result['submitter'] = conn.execute('SELECT name FROM users WHERE id=?', (row['submitter_id'],)).fetchone()[0]
+        message = conn.execute('SELECT id,provider_id,sender,received_at,simulated FROM whatsapp_messages WHERE expense_id=?', (row['id'],)).fetchone()
+        result['whatsapp_source'] = dict(message) if message else None
         result['history'] = [dict(item) for item in conn.execute('SELECT e.revision,e.action,e.reason,e.created_at,u.name actor FROM expense_events e JOIN users u ON u.id=e.actor_id WHERE e.expense_id=? ORDER BY e.created_at', (row['id'],))]
         result['versions'] = [{**dict(item), 'amount': money(item['amount_minor'])} for item in conn.execute('SELECT revision,vendor,purpose,category,occurred_on,amount_minor,receipt_hash FROM expense_versions WHERE expense_id=? ORDER BY revision', (row['id'],))]
         for item in result['versions']:

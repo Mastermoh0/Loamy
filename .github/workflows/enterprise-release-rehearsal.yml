@@ -33,7 +33,7 @@ jobs:
       - name: Check migration reproducibility
         run: |
           python scripts/generate_enterprise_migration.py
-          git diff --exit-code -- scripts/sql/enterprise/001_enterprise.sql
+          git diff --exit-code -- scripts/sql/enterprise/001_enterprise.sql scripts/sql/enterprise/003_supplier_whatsapp.sql
       - name: Start disposable PostgreSQL with TLS
         run: docker compose --env-file .local-data/postgres-test.env -f compose.enterprise-test.yml -p loamy-enterprise-test up -d --wait
       - name: Frontend checks and business-only production build
@@ -41,13 +41,13 @@ jobs:
           VITE_ENTERPRISE_ENABLED: 'true'
           VITE_ENTERPRISE_ONLY: 'true'
         run: |
-          npx eslint src/App.jsx src/BusinessWorkspace.jsx src/WorkspaceVerification.jsx src/WorkspaceFinances.jsx src/WorkspaceOrders.jsx src/WorkspaceInvoice.jsx src/WorkspacePayments.jsx src/WorkspaceExpenses.jsx src/WorkspaceOwner.jsx src/services/workspaceService.js
+          npx eslint src/App.jsx src/BusinessWorkspace.jsx src/WorkspaceVerification.jsx src/WorkspaceFinances.jsx src/WorkspaceOrders.jsx src/WorkspaceInvoice.jsx src/WorkspacePayments.jsx src/WorkspaceExpenses.jsx src/WorkspaceOwner.jsx src/WorkspaceSuppliers.jsx src/WorkspaceWhatsApp.jsx src/services/workspaceService.js
           npm run build
       - name: Workflow, security-boundary and concurrency checks
         env:
           LOAMY_RUN_POSTGRES_TESTS: '1'
           LOAMY_RUN_OCR_TESTS: '1'
-        run: python -m unittest test_workspace_features test_workspace_orders test_workspace_invoices test_workspace_payments test_workspace_expenses test_workspace_owner test_workspace_receipts test_enterprise_production -v
+        run: python -m unittest test_workspace_features test_workspace_orders test_workspace_invoices test_workspace_payments test_workspace_expenses test_workspace_owner test_workspace_receipts test_workspace_suppliers test_workspace_whatsapp test_enterprise_production -v
       - name: Verify backup and restore
         run: python scripts/rehearse_enterprise_restore.py
       - name: Build and smoke-test production container

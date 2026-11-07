@@ -28,7 +28,7 @@ There are **two distinct execution modes**:
 
 The candidate intentionally keeps business accounts separate from the original personal-app accounts. It does not import the original `main.py`/Gmail backend or trust a personal-app `localStorage` user ID. Merging the code alone does **not** unify identity, financial records or bank connections.
 
-The recorded test cases and release rehearsal validate the stated paths. They are not a certification of the original application's entire security, mobile builds or unknown production configuration. See section 12 for the newest dashboard/receipt changes and validation; earlier counts are historical.
+The recorded test cases and release rehearsal validate the stated paths. They are not a certification of the original application's entire security, mobile builds or unknown production configuration. See section 13 for the newest supplier/WhatsApp changes and validation; earlier counts are historical.
 
 ## 2. What is implemented
 
@@ -51,6 +51,8 @@ The recorded test cases and release rehearsal validate the stated paths. They ar
 | Posting and categories | Explicit posting or linking an existing matching debit, duplicate guards, canonical category totals and evidence drill-down | Reconcile future real bank debits to receipts rather than posting the same expense again |
 | Owner overview | Combined/per-location recorded cash movements, current receivables, order value, receiving-account credits and expense review counts | Connect real bank ingestion separately; no bank balance, profit calculation or historical receivables reconstruction is inferred |
 | Offline receipt extraction | JPEG/PNG, text PDF and scanned PDF suggestions for vendor, total and date; editable draft, exact-file provenance and independent approval | Install native OCR tools; assess representative receipts in staging and agree retention/resource limits |
+| Supplier invoices/payables | Private original invoice imports, exact liabilities/due dates, duplicate guards, partial/split allocations to existing expense debits, reversals and reasoned voids; current owner payables | Confirm real supplier references, payment evidence and operating policy; no funds transfer or full accrual accounting |
+| WhatsApp receipt intake | Operator-scoped signed incoming webhooks, verified-account sender linking, durable media queue/worker, private inbox and editable expense drafts with original evidence | Configure Meta app/business number/token/version/routing, supervise worker, validate real provider receipts; group capture remains disabled |
 | Production foundation | Private PostgreSQL migration, least-privilege role, serializable writes, secure configuration, container/health checks, dependency lock and release CI definition | Actual staging deployment, provider configuration, backups/alerts and release approval |
 
 ### Role boundaries
@@ -99,6 +101,9 @@ All paths in this document are repository-relative, so the handoff works on anot
 | `workspace_expenses.py` | Private receipt versions, independent review, posting/linking and category drill-down |
 | `workspace_owner.py`, `src/WorkspaceOwner.jsx` | Owner-only consolidation and responsive overview |
 | `workspace_receipt_reader.py`, `Dockerfile.receipt-ocr` | Offline receipt OCR/parsing; optional isolated Docker reader for local Windows preview |
+| `workspace_suppliers.py`, `src/WorkspaceSuppliers.jsx` | Supplier invoice snapshots, liabilities and existing-debit payment allocation UI/API |
+| `workspace_whatsapp.py`, `src/WorkspaceWhatsApp.jsx`, `scripts/process_whatsapp_inbox.py` | Sender identity, signed intake, durable private receipt queue/inbox, bounded media transport and separately supervised worker |
+| `scripts/sql/enterprise/003_supplier_whatsapp.sql` | Five additive private intake/payables tables, restricted grants and retrieved-evidence immutability trigger |
 | `scripts/sql/enterprise/002_receipt_extraction.sql` | Additive extraction/provenance tables and restricted grants, following unchanged migration 001 |
 | `src/BusinessWorkspace.jsx`, `src/BusinessWorkspace.css` | Workspace shell, business switching and role navigation |
 | `src/WorkspaceVerification.jsx`, `src/WorkspaceFinances.jsx` | Verification and location ledger UI |
@@ -131,7 +136,7 @@ The root is `/enterprise-api`. Exact request models and status handling are in t
 
 ### Data ownership
 
-The PostgreSQL schema contains 28 tables including migration tracking (26 from migration 001 plus two from 002):
+The PostgreSQL schema contains 33 tables including migration tracking (26 from 001, two from 002 and five from 003):
 
 - Identity/access: `users`, `sessions`, `businesses`, `locations`, `memberships`, `invitations`, `audit_events`, `login_attempts`.
 - Verification: `email_verifications`, `mail_outbox`.
@@ -141,6 +146,8 @@ The PostgreSQL schema contains 28 tables including migration tracking (26 from m
 - Payments: `payment_accounts`, `payment_evidence`, `invoice_accounts`, `payment_allocations`.
 - Expenses: `expense_submissions`, `expense_versions`, `expense_events`, `expense_creation_keys`.
 - Extraction/provenance: `receipt_extractions`, `expense_extractions`.
+- Supplier payables: `supplier_bills`, `supplier_payments`.
+- WhatsApp intake: `whatsapp_challenges`, `whatsapp_senders`, `whatsapp_messages`.
 - Release tracking: `schema_migrations`.
 
 Receipts and original PDFs are private durable database bytes. The runtime does not depend on writable container disk. Backups, retention, encryption and connection capacity still need the actual provider's operating policy.
@@ -169,7 +176,7 @@ Real email configuration and a controlled mailbox are required for verification/
 2. **Refresh against upstream in an isolated review branch/worktree.** Review both sides of changes to `package.json`/lockfile, routing, sign-in entry points, mobile navigation, Vite configuration, framework requirements and CI. Do not overwrite upstream improvements wholesale.
 3. **Choose identity and canonical-data integration.** Resolve the decisions above before wiring real memberships, transactions or Gmail connections into these screens. Keep the original personal flows working.
 4. **Provision separate staging.** Create a migration owner and a strong-secret `loamy_enterprise_app` LOGIN role without admin privileges. The application must not use the owner or a browser/service-role key as a substitute.
-5. **Review/apply the private migrations.** On a new schema apply `scripts/sql/enterprise/001_enterprise.sql`, then `002_receipt_extraction.sql` as the migration owner. On a previously migrated 001 schema apply only 002 after backup/review. Runtime now requires version `002_receipt_extraction`. An unexpected existing schema requires inspection, not a `DROP SCHEMA` shortcut. Keep it out of the Supabase Data API. Add forward migrations rather than editing applied history.
+5. **Review/apply the private migrations.** On a new schema apply `scripts/sql/enterprise/001_enterprise.sql`, then `002_receipt_extraction.sql` and `003_supplier_whatsapp.sql` as the migration owner. On a previously migrated database apply only missing forward migrations after backup/review. Runtime now requires `003_supplier_whatsapp`. An unexpected existing schema requires inspection, not a `DROP SCHEMA` shortcut. Keep it out of the Supabase Data API. Add forward migrations rather than editing applied history.
 6. **Configure secrets and build.** Follow `enterprise.env.example` and `deploy/ENTERPRISE-RUNBOOK.md`. Use real provider certificate verification and SMTP. Enable `VITE_ENTERPRISE_ENABLED=true`; the separate candidate also uses `VITE_ENTERPRISE_ONLY=true`. Never deploy `npm run dev:workspace` or use captured verification in production.
 7. **Run the complete checks in staging.** Repeat the automated suite and test real browser HTTPS/cookies, provider mail arrival, representative receipts, receiving-account/source ownership and cross-business isolation. A merge/build alone is not acceptance.
 8. **Pilot and release.** Agree backup/recovery/monitoring, approve the same tested image digest and release a small pilot. Keep a schema-compatible prior image available. Application rollback must not delete financial history; agree a forward-fix/recovery procedure if the previous image is incompatible.
@@ -228,13 +235,13 @@ Open `http://127.0.0.1:5173/business`. This is local test data, not production.
 Basic workflow checks, after installing the appropriate isolated dependencies:
 
 ```text
-python -m unittest test_workspace_features test_workspace_orders test_workspace_invoices test_workspace_payments test_workspace_expenses test_workspace_owner test_workspace_receipts -v
+python -m unittest test_workspace_features test_workspace_orders test_workspace_invoices test_workspace_payments test_workspace_expenses test_workspace_owner test_workspace_receipts test_workspace_suppliers test_workspace_whatsapp -v
 ```
 
 For the full release rehearsal, follow `PRODUCTION-READINESS.md` and `.github/workflows/enterprise-release-rehearsal.yml`: install `requirements-rehearsal.txt` and native OCR tools (or the explicitly configured local Docker reader), generate ignored random test credentials/certificates, start the disposable TLS PostgreSQL service, build the business-only frontend and set `LOAMY_RUN_POSTGRES_TESTS=1` and `LOAMY_RUN_OCR_TESTS=1` before:
 
 ```text
-python -m unittest test_workspace_features test_workspace_orders test_workspace_invoices test_workspace_payments test_workspace_expenses test_workspace_owner test_workspace_receipts test_enterprise_production -v
+python -m unittest test_workspace_features test_workspace_orders test_workspace_invoices test_workspace_payments test_workspace_expenses test_workspace_owner test_workspace_receipts test_workspace_suppliers test_workspace_whatsapp test_enterprise_production -v
 python scripts/rehearse_enterprise_restore.py
 docker build -f Dockerfile.enterprise -t loamy-enterprise:rehearsal .
 python scripts/rehearse_enterprise_container.py
@@ -252,7 +259,7 @@ Do not mark these as implemented merely because related legacy code exists elsew
 - Automatic invitation email and verified real provider delivery/monitoring.
 - Authorized Gmail/bank ingestion into the scoped canonical ledger, with source uniqueness and real matching fixtures.
 - Automatic settlement, real bank refunds/transfers and customer payment reminders.
-- WhatsApp submission/group capture, supplier-invoice/payables ingestion and broader receipt formats/languages.
+- Live WhatsApp account/provider acceptance and group capture (disabled); broader receipt formats/languages, supplier credits/refunds and accrual-accounting integration.
 - Source-backed AI insights, financial-history exports and historical receivables snapshots. The consolidated owner overview is implemented; these additional reporting capabilities are not.
 - Service inventory/room availability, tax/discount rules, POS integration, QR linking and broader currency/bank support unless separately implemented later.
 - Mobile release/tooling follow-up and full regression/security review of the original personal backend when integrated.
@@ -323,8 +330,43 @@ The root `AGENTS.md` reinforces this maintenance requirement for future work in 
 | 7 November 2026 | Initial consolidated handoff: business/roles/verification, ledger, catalogue/orders, invoices/email, payment allocations, staff receipts/review/categories and production candidate | Documents prior 39-case release rehearsal, build/audits/container/restore results; no new runtime tests required for this documentation-only addition |
 | 7 November 2026 | Published the complete implementation to the fork's `mohammeds-branch` in feature commit `3294da8`; added detailed feature/validation commit notes and ongoing publication instructions | Fresh pre-push run: 35 workflow/configuration cases, targeted frontend lint and business-only build passed. The PostgreSQL-specific rehearsal cases were not rerun for this publication; their prior results remain recorded above. Remote feature-commit SHA verified. |
 | 7 November 2026 | Added consolidated owner overview and offline receipt extraction with version-bound suggestions; additive migration 002 and deployment/CI documentation | 47 backend tests passed with real OCR and PostgreSQL enabled; lint/build, real desktop/mobile workflow, 28-table restore and updated restricted production container/OCR rehearsal passed. Publication is represented by this feature/handoff commit in branch history. |
+| 7 November 2026 | Added supplier invoice liabilities/payment allocations and WhatsApp private receipt intake/worker, simulation and sender linking; forward migration 003 and operator setup notes | 60 backend tests passed with no skips; real OCR, PostgreSQL concurrency/evidence/upgrade checks, 33-table restore and restricted container rehearsal passed. Actual WhatsApp transport remains mocked and requires owner-side acceptance. |
 
-## 13. Release acceptance record — fill only after verification
+## 13. Supplier invoices and WhatsApp receipt intake — 7 November 2026
+
+### Supplier bills: how they work
+
+`workspace_suppliers.py` adds `/enterprise-api/businesses/{business_id}/locations/{location_id}/supplier-bills` under verified owner/manager/finance authorization; non-owners stay at their assigned location. Staff/front desk cannot view/import supplier liabilities or download their original invoices.
+
+- **Import:** POST confirmed vendor, supplier reference, description/category, exact NGN amount, invoice date/due date, original JPEG/PNG/PDF (2 MB max), optional matching extraction ID and idempotency key. Issue date cannot be future; due date cannot precede it. Active supplier/reference keys are case-insensitive and active receipt SHA-256 is unique per business. Reusing a request key with changed content is rejected. Original bytes/details are immutable; corrections retain a reasoned void and a new import/key. After voiding, the same original file/reference can be re-imported with corrected fields while the old snapshot remains available. Active duplicate guards still apply.
+- **OCR:** the UI reuses the existing location-scoped offline receipt reader. Vendor/total/date are editable suggestions, never proof of correctness or payment. Supplier reference, purpose/category and due date require human confirmation. Suggestions are bound to actor/business/location/exact file and remain visible beside the confirmed invoice.
+- **Liability only:** importing an invoice creates no financial record or paid expense. GET returns exact current outstanding/overdue totals across all bills even though the displayed list is capped at 100. Overdue means an unpaid amount with due date before Lagos today. Owner overview now includes current combined/per-location supplier payables separately from customer receivables and recorded cash outflow.
+- **Payment matching:** POST `/{bill_id}/payments` links an already posted expense debit from the same business/location. It supports partial/split payments but cannot exceed either unallocated debit funds or the bill balance; income, foreign-location debits and debits before the invoice date are rejected. A reviewed advance-payment model is not implemented. This allocation never creates another cash entry or initiates a bank transfer.
+- **Corrections:** POST `/{bill_id}/payments/{payment_id}/reverse` retains the original association/reason and records the reversal. POST `/{bill_id}/void` retains invoice evidence but requires no active allocations. Existing financial-record voiding is also blocked while supplier allocations remain. Posting a staff receipt and importing its supplier bill do not automatically imply two different purchases; reconcile the existing canonical debit.
+- **Not included:** supplier tax/credit notes, FX, automatic settlement, payment execution, full accrual/expense recognition, automatic supplier email imports or exports. This release imports a confirmed document through the workspace, with optional offline extraction.
+
+### WhatsApp: how staff identity and evidence work
+
+This implements inbound private-message receipt intake, with **live access disabled by default**. It adds no outbound acknowledgment/template messages and does not scrape WhatsApp Web. The guarded preview has an explicitly labelled local simulation that sends no WhatsApp traffic and does not verify a real phone. Production refuses the simulation endpoint.
+
+1. An operator maps an approved provider phone-number ID to an existing Loamy business in `LOAMY_WHATSAPP_ROUTES`, with app-secret, handshake token, media-access token and an explicitly supported Graph version. These are server/worker secrets; browser users cannot reroute a number or supply arbitrary download URLs. See `enterprise.env.example` and the runbook's staged setup procedure.
+2. Verified staff selects their location and requests a one-use link code. Only a hash is stored; code lasts ten minutes, replaces previous unused codes and is limited to ten requests per account/hour. They privately send `LINK <code>` to the operator-confirmed business WhatsApp number. A valid provider-signed message binds its numeric sender to that account/location. Display/contact names are not identity. Active sender ownership cannot be taken by another account; unlinking or membership removal blocks new intake. Tokens are never sent to a WhatsApp recipient by this codebase.
+3. `/enterprise-api/integrations/whatsapp/webhook` handles the GET verification challenge and HMAC-SHA256 signed raw POST body. It alone is exempt from browser Origin, while Host, HTTPS and bounded body checks remain. Unknown numbers, unlinked/stale senders, unsupported message types and explicit group contexts are ignored. Supported images/documents carry immutable provider message ID, sender/account/location, timestamp, caption, media ID and expected SHA-256. Duplicate deliveries do not enqueue twice. Thirty receipts per staff/hour is the intake limit; a 429 rolls the batch back for provider retry rather than silently acknowledging a dropped receipt.
+4. Webhook acknowledgment follows durable queue commit. Run `python scripts/process_whatsapp_inbox.py` as a separately supervised worker with the same image/config/database; `--once` is available for scheduling. It claims one item with a 180-second recoverable lease, checks current membership/link, fetches media metadata from fixed Graph API and downloads only HTTPS `lookaside.fbsbx.com` without redirects. It checks streamed size (2 MB), actual JPEG/PNG/PDF bytes and expected media hash, with bounded timeouts. Media failures are visible for explicit retry; attempts max out at five. Current authorization is checked again before saving. No provider data/credentials were used during development tests; transport was mocked.
+5. The staff member's private inbox shows queued/ready/failed/submitted/discarded receipts. They can retry a failed retrieval, download the original, dismiss unsubmitted evidence with retained history, or open an editable expense draft. OCR is optional; original file, sender metadata and caption stay attached. Server submission verifies actor/business/location/hash and consumes the ready message atomically. A different staff member cannot claim it. Submitting follows the existing independent reviewer and explicit post/link workflow; it never auto-approves or posts money.
+6. Submitted expenses expose their evidence source to authorized reviewers. Inbox receipt contents remain private to their submitter. Captions/extracted text are untrusted plain text; no instructions in them are executed. A PostgreSQL trigger prevents rewriting already retrieved receipt bytes/hash/type; the app role cannot rewrite provider identity/message fields or supplier invoice amounts. Financial history and evidence are not deleted to correct errors.
+
+**Provider acceptance gate:** actual sender identifiers, supported media hosts, permissions, subscriptions and payloads must be tested with Samuel's Meta account. Group support is disabled/unverified, including existing staff groups. Native Meta docs returned access/rate-limit errors during research; primary references consulted were [WhatsApp's receiving-message guide](https://github.com/WhatsApp/WhatsApp-Nodejs-SDK/blob/main/website/docs/receivingMessages.md) and [Meta's official Postman collection](https://www.postman.com/meta/whatsapp-business-platform/collection/wlk6lh4/whatsapp-cloud-api). Their examples are not evidence of current group eligibility or a live integration. Record representative sanitized private-message fixtures before enabling production intake; do not relax signature, sender, tenant or URL checks to accommodate an unverified format.
+
+### Migration, operation and validation
+
+- Apply additive **003_supplier_whatsapp** after 002. Prior 001/002 artifacts remain unchanged. Runtime now requires 003; do not start the new image before its migration is reviewed/applied. Five new tables bring the private schema to **33**. The schema generator reproduces both 001 and 003 from empty schemas; it never migrates user data automatically.
+- Agree retention for unsubmitted WhatsApp files/captions/identifiers, failed jobs and expired challenges while retaining linked evidence and financial history. The worker must be supervised separately and monitored for queue age/failures; no cron/hosting provider or live WhatsApp setup has been provisioned. Restart on serialization/process failure; leases recover incomplete claims. User-visible manual upload remains available.
+- **60 backend tests passed, no skips**, with real OCR and isolated TLS PostgreSQL enabled. New tests cover exact supplier liabilities/no extra cash, duplicate imports, partial/split payments/reversals, roles/locations, invalid amounts/dates, signed sender linking, replay/unsupported/group rejection, private drafts, revocation, failed retrieval/retry/discard, evidence mismatch and credential-safe media downloads. PostgreSQL tests include concurrent supplier allocations, retained pre-migration data and evidence immutability. Provider transport is simulated; actual offline OCR still uses real tools.
+- Backup/restore compared all **33 tables** including private bytes and financial rows; source unchanged. Rebuilt non-root/read-only production image passed TLS database, readiness/frontend, Host/HTTP/config rejection and actual packaged OCR checks. Targeted UI lint/build passed; the UI detector reported no findings. Browser imported a fictional NGN 1,000.10 invoice, matched its existing NGN 450.05 expense debit and showed NGN 550.05 owed without another cash entry. The simulated WhatsApp inbox preserved receipt/caption through OCR and expense submission, stayed explicitly labelled as simulated and required a different reviewer. Both screens were inspected at desktop/mobile widths with no horizontal document overflow; local evidence lives under `../output/loamy-study/supplier-bills-*.png` and `whatsapp-inbox-*.png`. The preview was restarted after final backend changes with fictional evidence retained.
+- No real WhatsApp connection/message, bank transfer, live customer data, production migration/deployment or upstream merge was performed. Samuel's staging/provider setup, retention, worker operations and owner acceptance remain release gates.
+
+## 14. Release acceptance record — fill only after verification
 
 - Implementation commit: **Published and verified: `3294da82ab452052969ff4a9ba32f7ea6225d469`**; inspect subsequent branch history for documentation/future updates.
 - Incoming upstream PR: **Not opened**.
