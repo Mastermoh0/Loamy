@@ -11,6 +11,7 @@ FROM python:3.14-slim-bookworm
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 LOAMY_WORKSPACE_SERVE_DIST=1
 WORKDIR /app
 COPY requirements-production.lock ./
+RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng poppler-utils && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir -r requirements-production.lock && useradd --uid 10001 --create-home workspace
 COPY enterprise_preview.py enterprise_production.py enterprise_static.py workspace_*.py ./
 COPY --from=frontend /app/dist ./dist

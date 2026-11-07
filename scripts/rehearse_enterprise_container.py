@@ -55,10 +55,20 @@ try:
     assert httpx.get(root + '/enterprise-api/config', headers={'Host': 'workspace.example.test'}).status_code == 400
     assert httpx.get(root + '/enterprise-api/config', headers={'Host': 'attacker.example.test'}).status_code == 403
     assert docker('exec', name, 'id', '-u').stdout.strip() == '10001'
+    # Verify the packaged reader with the same non-root/read-only runtime, not a mock.
+    docker('exec', name, 'python', '-c', '''from io import BytesIO
+from PIL import Image, ImageDraw, ImageFont
+from workspace_receipt_reader import native_text, parse_receipt
+picture=Image.new('RGB',(1200,300),'white')
+font=ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',44)
+ImageDraw.Draw(picture).multiline_text((40,40),'TEST STORE\\nTOTAL NGN 1,000.10',font=font,fill='black',spacing=25)
+out=BytesIO(); picture.save(out,format='PNG')
+assert parse_receipt(native_text(out.getvalue(),'image/png'))['suggested']['amount']=='1000.10'
+print('Packaged offline OCR passed')''')
     refused = docker('run', '--rm', '--network', 'none', '-e', 'LOAMY_MAIL_TRANSPORT=capture', 'loamy-enterprise:rehearsal', check=False)
     assert refused.returncode != 0
     report.update({'container_nonroot_uid': 10001, 'read_only_filesystem': True, 'readiness': 'passed',
-                   'compiled_frontend': 'passed', 'unknown_api_route': '404', 'http_rejected': True,
+                   'compiled_frontend': 'passed', 'offline_receipt_ocr': 'passed', 'unknown_api_route': '404', 'http_rejected': True,
                    'unexpected_host_rejected': True, 'missing_configuration_rejected': True,
                    'image': docker('image', 'inspect', 'loamy-enterprise:rehearsal', '--format', '{{.Id}}').stdout.strip()})
     target = ROOT.parent / 'output' / 'loamy-study' / 'production-container-rehearsal.json'

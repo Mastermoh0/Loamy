@@ -19,6 +19,8 @@ jobs:
           cache: npm
       - run: pip install -r requirements-rehearsal.txt
       - run: npm ci
+      - name: Install offline receipt tools
+        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr tesseract-ocr-eng poppler-utils fonts-dejavu-core
       - name: Audit production dependencies
         run: |
           npm audit --omit=dev --audit-level=moderate
@@ -39,12 +41,13 @@ jobs:
           VITE_ENTERPRISE_ENABLED: 'true'
           VITE_ENTERPRISE_ONLY: 'true'
         run: |
-          npx eslint src/App.jsx src/BusinessWorkspace.jsx src/WorkspaceVerification.jsx src/WorkspaceFinances.jsx src/WorkspaceOrders.jsx src/WorkspaceInvoice.jsx src/WorkspacePayments.jsx src/WorkspaceExpenses.jsx src/services/workspaceService.js
+          npx eslint src/App.jsx src/BusinessWorkspace.jsx src/WorkspaceVerification.jsx src/WorkspaceFinances.jsx src/WorkspaceOrders.jsx src/WorkspaceInvoice.jsx src/WorkspacePayments.jsx src/WorkspaceExpenses.jsx src/WorkspaceOwner.jsx src/services/workspaceService.js
           npm run build
       - name: Workflow, security-boundary and concurrency checks
         env:
           LOAMY_RUN_POSTGRES_TESTS: '1'
-        run: python -m unittest test_workspace_features test_workspace_orders test_workspace_invoices test_workspace_payments test_workspace_expenses test_enterprise_production -v
+          LOAMY_RUN_OCR_TESTS: '1'
+        run: python -m unittest test_workspace_features test_workspace_orders test_workspace_invoices test_workspace_payments test_workspace_expenses test_workspace_owner test_workspace_receipts test_enterprise_production -v
       - name: Verify backup and restore
         run: python scripts/rehearse_enterprise_restore.py
       - name: Build and smoke-test production container

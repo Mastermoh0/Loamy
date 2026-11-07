@@ -28,7 +28,7 @@ There are **two distinct execution modes**:
 
 The candidate intentionally keeps business accounts separate from the original personal-app accounts. It does not import the original `main.py`/Gmail backend or trust a personal-app `localStorage` user ID. Merging the code alone does **not** unify identity, financial records or bank connections.
 
-The 39 passing test cases and release rehearsal validate the stated paths. They are not a certification of the original application's entire security, mobile builds or unknown production configuration.
+The recorded test cases and release rehearsal validate the stated paths. They are not a certification of the original application's entire security, mobile builds or unknown production configuration. See section 12 for the newest dashboard/receipt changes and validation; earlier counts are historical.
 
 ## 2. What is implemented
 
@@ -49,6 +49,8 @@ The 39 passing test cases and release rehearsal validate the stated paths. They 
 | Payment corrections | Reasoned allocation reversals; guards on cancelling allocated invoices or voiding allocated income | Define operational correction/refund responsibilities; reversal never moves/refunds money |
 | Staff expenses | Private JPEG/PNG/PDF receipt, submitter identity, clarification/rejection/resubmission, immutable versions and independent approval | Confirm expense policy, retention, account recovery and staff onboarding |
 | Posting and categories | Explicit posting or linking an existing matching debit, duplicate guards, canonical category totals and evidence drill-down | Reconcile future real bank debits to receipts rather than posting the same expense again |
+| Owner overview | Combined/per-location recorded cash movements, current receivables, order value, receiving-account credits and expense review counts | Connect real bank ingestion separately; no bank balance, profit calculation or historical receivables reconstruction is inferred |
+| Offline receipt extraction | JPEG/PNG, text PDF and scanned PDF suggestions for vendor, total and date; editable draft, exact-file provenance and independent approval | Install native OCR tools; assess representative receipts in staging and agree retention/resource limits |
 | Production foundation | Private PostgreSQL migration, least-privilege role, serializable writes, secure configuration, container/health checks, dependency lock and release CI definition | Actual staging deployment, provider configuration, backups/alerts and release approval |
 
 ### Role boundaries
@@ -95,6 +97,9 @@ All paths in this document are repository-relative, so the handoff works on anot
 | `workspace_invoices.py` | Issued invoice/PDF snapshots, downloads and deduplicated email attempts |
 | `workspace_payments.py` | Receiving accounts, evidence, candidate review, allocations, reversals and balance calculations |
 | `workspace_expenses.py` | Private receipt versions, independent review, posting/linking and category drill-down |
+| `workspace_owner.py`, `src/WorkspaceOwner.jsx` | Owner-only consolidation and responsive overview |
+| `workspace_receipt_reader.py`, `Dockerfile.receipt-ocr` | Offline receipt OCR/parsing; optional isolated Docker reader for local Windows preview |
+| `scripts/sql/enterprise/002_receipt_extraction.sql` | Additive extraction/provenance tables and restricted grants, following unchanged migration 001 |
 | `src/BusinessWorkspace.jsx`, `src/BusinessWorkspace.css` | Workspace shell, business switching and role navigation |
 | `src/WorkspaceVerification.jsx`, `src/WorkspaceFinances.jsx` | Verification and location ledger UI |
 | `src/WorkspaceOrders.jsx`, `src/WorkspaceInvoice.jsx` | Catalogue/order/invoice UI |
@@ -126,7 +131,7 @@ The root is `/enterprise-api`. Exact request models and status handling are in t
 
 ### Data ownership
 
-The PostgreSQL schema contains 26 tables including migration tracking:
+The PostgreSQL schema contains 28 tables including migration tracking (26 from migration 001 plus two from 002):
 
 - Identity/access: `users`, `sessions`, `businesses`, `locations`, `memberships`, `invitations`, `audit_events`, `login_attempts`.
 - Verification: `email_verifications`, `mail_outbox`.
@@ -135,6 +140,7 @@ The PostgreSQL schema contains 26 tables including migration tracking:
 - Invoices: `invoices`, `invoice_deliveries`.
 - Payments: `payment_accounts`, `payment_evidence`, `invoice_accounts`, `payment_allocations`.
 - Expenses: `expense_submissions`, `expense_versions`, `expense_events`, `expense_creation_keys`.
+- Extraction/provenance: `receipt_extractions`, `expense_extractions`.
 - Release tracking: `schema_migrations`.
 
 Receipts and original PDFs are private durable database bytes. The runtime does not depend on writable container disk. Backups, retention, encryption and connection capacity still need the actual provider's operating policy.
@@ -163,7 +169,7 @@ Real email configuration and a controlled mailbox are required for verification/
 2. **Refresh against upstream in an isolated review branch/worktree.** Review both sides of changes to `package.json`/lockfile, routing, sign-in entry points, mobile navigation, Vite configuration, framework requirements and CI. Do not overwrite upstream improvements wholesale.
 3. **Choose identity and canonical-data integration.** Resolve the decisions above before wiring real memberships, transactions or Gmail connections into these screens. Keep the original personal flows working.
 4. **Provision separate staging.** Create a migration owner and a strong-secret `loamy_enterprise_app` LOGIN role without admin privileges. The application must not use the owner or a browser/service-role key as a substitute.
-5. **Review/apply the private migration.** Apply `scripts/sql/enterprise/001_enterprise.sql` once as the migration owner. An existing `enterprise` schema requires inspection, not a `DROP SCHEMA` shortcut. Keep it out of the Supabase Data API. After a migration has been applied, add forward migrations rather than editing its original history.
+5. **Review/apply the private migrations.** On a new schema apply `scripts/sql/enterprise/001_enterprise.sql`, then `002_receipt_extraction.sql` as the migration owner. On a previously migrated 001 schema apply only 002 after backup/review. Runtime now requires version `002_receipt_extraction`. An unexpected existing schema requires inspection, not a `DROP SCHEMA` shortcut. Keep it out of the Supabase Data API. Add forward migrations rather than editing applied history.
 6. **Configure secrets and build.** Follow `enterprise.env.example` and `deploy/ENTERPRISE-RUNBOOK.md`. Use real provider certificate verification and SMTP. Enable `VITE_ENTERPRISE_ENABLED=true`; the separate candidate also uses `VITE_ENTERPRISE_ONLY=true`. Never deploy `npm run dev:workspace` or use captured verification in production.
 7. **Run the complete checks in staging.** Repeat the automated suite and test real browser HTTPS/cookies, provider mail arrival, representative receipts, receiving-account/source ownership and cross-business isolation. A merge/build alone is not acceptance.
 8. **Pilot and release.** Agree backup/recovery/monitoring, approve the same tested image digest and release a small pilot. Keep a schema-compatible prior image available. Application rollback must not delete financial history; agree a forward-fix/recovery procedure if the previous image is incompatible.
@@ -222,13 +228,13 @@ Open `http://127.0.0.1:5173/business`. This is local test data, not production.
 Basic workflow checks, after installing the appropriate isolated dependencies:
 
 ```text
-python -m unittest test_workspace_features test_workspace_orders test_workspace_invoices test_workspace_payments test_workspace_expenses -v
+python -m unittest test_workspace_features test_workspace_orders test_workspace_invoices test_workspace_payments test_workspace_expenses test_workspace_owner test_workspace_receipts -v
 ```
 
-For the full release rehearsal, follow `PRODUCTION-READINESS.md` and `.github/workflows/enterprise-release-rehearsal.yml`: install `requirements-rehearsal.txt`, generate ignored random test credentials/certificates, start the disposable TLS PostgreSQL service, build the business-only frontend and set `LOAMY_RUN_POSTGRES_TESTS=1` before:
+For the full release rehearsal, follow `PRODUCTION-READINESS.md` and `.github/workflows/enterprise-release-rehearsal.yml`: install `requirements-rehearsal.txt` and native OCR tools (or the explicitly configured local Docker reader), generate ignored random test credentials/certificates, start the disposable TLS PostgreSQL service, build the business-only frontend and set `LOAMY_RUN_POSTGRES_TESTS=1` and `LOAMY_RUN_OCR_TESTS=1` before:
 
 ```text
-python -m unittest test_workspace_features test_workspace_orders test_workspace_invoices test_workspace_payments test_workspace_expenses test_enterprise_production -v
+python -m unittest test_workspace_features test_workspace_orders test_workspace_invoices test_workspace_payments test_workspace_expenses test_workspace_owner test_workspace_receipts test_enterprise_production -v
 python scripts/rehearse_enterprise_restore.py
 docker build -f Dockerfile.enterprise -t loamy-enterprise:rehearsal .
 python scripts/rehearse_enterprise_container.py
@@ -246,8 +252,8 @@ Do not mark these as implemented merely because related legacy code exists elsew
 - Automatic invitation email and verified real provider delivery/monitoring.
 - Authorized Gmail/bank ingestion into the scoped canonical ledger, with source uniqueness and real matching fixtures.
 - Automatic settlement, real bank refunds/transfers and customer payment reminders.
-- Receipt OCR/extraction wired to this expense approval flow, WhatsApp submission/group capture and supplier-invoice/payables ingestion.
-- Rich owner dashboards across locations, source-backed AI insights and financial-history exports. Basic owner ledger totals already exist; they are not a complete consolidated reporting product.
+- WhatsApp submission/group capture, supplier-invoice/payables ingestion and broader receipt formats/languages.
+- Source-backed AI insights, financial-history exports and historical receivables snapshots. The consolidated owner overview is implemented; these additional reporting capabilities are not.
 - Service inventory/room availability, tax/discount rules, POS integration, QR linking and broader currency/bank support unless separately implemented later.
 - Mobile release/tooling follow-up and full regression/security review of the original personal backend when integrated.
 
@@ -260,6 +266,44 @@ Suggested starting task for Samuel's agent:
 ## 11. Keeping this file current
 
 The user has requested that completed, tested feature work be committed and pushed to `Mastermoh0/Loamy:mohammeds-branch`, with this handoff updated alongside it. Verify the destination and remote result each time. This is not authorization to merge into Samuel's main branch or deploy production.
+
+## 12. Owner overview and offline receipt extraction — 7 November 2026
+
+### Owner overview
+
+`GET /enterprise-api/businesses/{business_id}/owner-dashboard` requires a verified owner membership. Managers, finance and staff are denied; outsiders and foreign locations are not exposed. Optional `location_id`, `start`, `end` filters select one/all locations and an inclusive date range, defaulting to the last 30 days in Lagos time; maximum 366 days, no future end date.
+
+- Posted canonical ledger records determine money in/out/net. Voids are excluded. Order totals, allocations and approved-but-unposted receipts do not create additional cash movement.
+- Orders use `order_date` in the period; cancelled orders are counted separately and excluded from open order value.
+- Receivables use all currently issued invoices and active allocations backed by posted income, regardless of date filters. Outstanding and excess are clamped separately per invoice; overdue means due date strictly before today. This is a current position, not historical ageing at the selected end date.
+- Receiving accounts show recorded credits within the dates, current allocations from those credits, and unallocated amounts. `bank_balance` is explicitly null and `bank_feed_connected` false. No opening balance/live feed is invented.
+- Pending review/approved-unposted expenses are current queue counts. The response includes per-location rows, matching totals, source counts and generation time. It writes nothing and creates no reporting ledger.
+- UI: owner-only **Owner overview**, location/date form, loading/error/empty states, per-location breakdown and explanations of scope. Returning to the tab or selecting Update overview refreshes it; no live-push subscription.
+
+### Receipt extraction and provenance
+
+`POST /enterprise-api/businesses/{business_id}/locations/{location_id}/expenses/extract` accepts `receipt_base64`, under the existing verified session/business/location scope. Any member can read their own selected receipt for their assigned location; owners can select any business location. It does not create an expense or financial record.
+
+1. Validate JPEG/PNG/PDF bytes with the existing upload checks: 2 MB, image verification and 20 megapixels. A PDF must have no more than three pages for extraction.
+2. Tesseract English reads images. Poppler extracts a text PDF directly; otherwise bounded-size page rendering is read by Tesseract. Fixed subprocess arguments, temporary private files, no shell interpolation and no cloud model/service. Receipt content is data, never executable instructions.
+3. Conservative parsing suggests the first plausible vendor line, one unambiguous labelled total with two decimal places, and one ISO or day-first numeric date. Multiple totals/dates, unreadable/foreign-currency totals and future dates require manual entry. No item, VAT, exchange-rate, category or purpose inference is presented as fact. Every suggestion requires human confirmation.
+4. The UI prefills editable fields and displays warnings/extracted text. Purpose/category remain manual. Replacing the selected file clears extraction provenance. The server binds any submitted `extraction_id` to the exact receipt hash, actor, business and location; forged/mismatched links fail. Submitted values can differ from suggestions and both remain visible in version history.
+5. Existing independent review, immutable versions, clarification/resubmission, duplicate receipt checks and explicit posting/linking remain in force. Extraction never approves or posts money.
+
+New migration **002_receipt_extraction** adds `receipt_extractions` (actor-scoped attempts, receipt SHA-256, timestamp, pending/success/failed state, engine and bounded JSON suggestions/warnings/text) and immutable `expense_extractions` links to exact expense revisions. The app role may insert/read links but not rewrite/delete them; extraction result/status updates are limited to the attempt lifecycle. Existing migration 001 is unchanged and remains reproducible. A same-user/location/hash successful read is reused; uncached attempts are capped at ten per user/hour and extraction concurrency is one per worker. Failed reads allow manual submission. Unlinked attempts contain private receipt text; Samuel must set a retention/cleanup policy before staging acceptance without deleting linked audit evidence. A process crash may leave a pending attempt; retry can create another attempt within the limit.
+
+Production packaging: native OS tools in `Dockerfile.enterprise`. Local Windows preview may explicitly set `LOAMY_RECEIPT_OCR_DOCKER_IMAGE=loamy-receipt-ocr:local` after building `Dockerfile.receipt-ocr`. That fallback is allowed only with `LOAMY_LOCAL_PREVIEW=1`; its temporary reader container is non-root, read-only, network-disabled and resource-limited. Never mount a Docker socket into production. See the runbook for native setup and resource/patching gates.
+
+### Validation and release limits
+
+- Final complete backend run: **47 passed, no skips**, with PostgreSQL and real OCR both enabled. Actual OCR covered PNG, scanned PDF and text PDF, and rejected a four-page PDF. Dashboard checks included nonempty combined/per-location exact totals, cancellation, voids, reversals and current receivables outside the activity period. API workflow tests use deterministic OCR fixtures where noted; the real reader case and packaged reader check use the actual tools.
+- PostgreSQL checks exercised both migrations, extraction metadata/immutable version linkage, independent approval/posting and dashboard queries/owner permissions. Backup/restore compared all **28 tables**, including receipt/PDF bytes, without changing the source database.
+- Targeted frontend lint and business-only build passed. Browser testing showed NGN 12,500.50 income once; real receipt extraction suggested NGN 1,000.10, corrected to NGN 1,000.20 on submission, retained original suggestions and left the expense pending independent review. The owner overview showed one awaiting review and zero extra posted expense.
+- Desktop 1280px and mobile 390px were inspected; dashboard and receipt screens had no horizontal document overflow. Evidence is local under `../output/loamy-study/owner-dashboard-*.png` and `receipt-extraction-*.png`; screenshots contain fictional test data only.
+- Rebuilt production image passed non-root/read-only runtime, TLS database/readiness, compiled UI, Host/HTTP/config rejection and **actual packaged OCR** checks. The initial OCR packaging omission and transient package-download failure were corrected/retried before this passing rehearsal.
+- Remaining release gates: Samuel's real staging identity/data mapping, migration backup/review, deployment configuration, representative receipt quality, retention policy, parser resource limits/OS patching and owner approval. No live deployment, bank feed, cloud OCR, automatic categorization, WhatsApp capture or automatic financial approval was performed.
+
+### Continuing handoff maintenance
 
 After a meaningful feature, migration or deployment change:
 
@@ -278,8 +322,9 @@ The root `AGENTS.md` reinforces this maintenance requirement for future work in 
 |---|---|---|
 | 7 November 2026 | Initial consolidated handoff: business/roles/verification, ledger, catalogue/orders, invoices/email, payment allocations, staff receipts/review/categories and production candidate | Documents prior 39-case release rehearsal, build/audits/container/restore results; no new runtime tests required for this documentation-only addition |
 | 7 November 2026 | Published the complete implementation to the fork's `mohammeds-branch` in feature commit `3294da8`; added detailed feature/validation commit notes and ongoing publication instructions | Fresh pre-push run: 35 workflow/configuration cases, targeted frontend lint and business-only build passed. The PostgreSQL-specific rehearsal cases were not rerun for this publication; their prior results remain recorded above. Remote feature-commit SHA verified. |
+| 7 November 2026 | Added consolidated owner overview and offline receipt extraction with version-bound suggestions; additive migration 002 and deployment/CI documentation | 47 backend tests passed with real OCR and PostgreSQL enabled; lint/build, real desktop/mobile workflow, 28-table restore and updated restricted production container/OCR rehearsal passed. Publication is represented by this feature/handoff commit in branch history. |
 
-## 12. Release acceptance record — fill only after verification
+## 13. Release acceptance record — fill only after verification
 
 - Implementation commit: **Published and verified: `3294da82ab452052969ff4a9ba32f7ea6225d469`**; inspect subsequent branch history for documentation/future updates.
 - Incoming upstream PR: **Not opened**.

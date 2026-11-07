@@ -1,5 +1,19 @@
 # Local business workspace
 
+## Owner overview and offline receipt reading (7 November 2026)
+
+Owners can open **Owner overview** for combined/per-location recorded activity and current invoice balances. Date filters affect posted cash movement and orders; receivables and review queues are current across dates. Recorded account credits are not live bank balances.
+
+For receipt reading, install Tesseract plus English data and Poppler on the host, or use the local Windows Docker fallback:
+
+```powershell
+docker build -f Dockerfile.receipt-ocr -t loamy-receipt-ocr:local .
+$env:LOAMY_RECEIPT_OCR_DOCKER_IMAGE='loamy-receipt-ocr:local'
+npm run dev:workspace
+```
+
+In **Expenses & receipts**, choose a receipt then select **Extract receipt details**. Confirm/edit vendor, NGN amount and purchase date; enter purpose/category and submit for a different reviewer. Neither extraction nor approval posts money. The same receipt hash and extraction provenance stay with each submitted version. Manual entry remains available when the reader is unavailable. No receipt is sent to a cloud OCR service. Extraction supports JPEG/PNG and PDFs of up to three pages, with the existing 2 MB upload cap. Generate an ignored fictional fixture with `python scripts/create_receipt_test_fixture.py` for local QA.
+
 For the separate PostgreSQL production candidate and its verified rehearsal, read `PRODUCTION-READINESS.md` and `deploy/ENTERPRISE-RUNBOOK.md`. This document describes the SQLite local preview only; do not deploy its launcher.
 
 Enterprise feature work on `mohammeds-branch`: businesses/locations, team permissions, email verification, location finances, service catalogues, front-desk orders and invoice/PDF/email delivery.

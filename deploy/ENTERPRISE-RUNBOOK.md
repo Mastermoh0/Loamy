@@ -12,6 +12,10 @@ Review and apply `scripts/sql/enterprise/001_enterprise.sql` as the migration ow
 
 Runtime connects only as the dedicated application role, using `sslmode=verify-full` and the provider's trusted CA. Keep the schema private and outside the Data API. Verify ordinary browser roles cannot read it. Keep administrative/migration credentials out of the application environment.
 
+For the owner overview/receipt release, apply `002_receipt_extraction.sql` after 001. For an existing 001 installation, back up first and apply only 002; do not regenerate/drop the initial schema. Runtime requires `002_receipt_extraction`. Include both new tables in backup, retention and access reviews.
+
+The release image installs Tesseract (executable plus English data) and Poppler. If packaging without this Dockerfile, install `tesseract-ocr`, `tesseract-ocr-eng` and `poppler-utils` from the OS repository. OCR uses temporary files and fixed subprocess commands; provide writable private `/tmp`, memory/CPU limits and process isolation. No cloud OCR credential or outbound service is required. Extraction accepts up to 2 MB, 20 megapixels for images and three PDF pages. Each external tool has a 20-second timeout; one extraction runs per worker, with ten uncached attempts per user/hour. A failed/unavailable reader leaves manual submission available. Keep OS parser packages updated; test resource limits and representative receipts in staging. Do not add the Docker socket to production: the optional Docker fallback is for guarded local preview only.
+
 ## Configure and build
 
 Use `enterprise.env.example` as a list of required settings; populate a secret manager, not a committed file. Configure identical public web/API origins when using the combined container. Configure real SMTP and a test recipient before testing mail. Never set `LOAMY_LOCAL_PREVIEW=1` on this service.

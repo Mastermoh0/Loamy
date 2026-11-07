@@ -18,6 +18,7 @@ from workspace_finances import install_finances
 from workspace_orders import install_orders
 from workspace_payments import install_payments
 from workspace_expenses import install_expenses
+from workspace_owner import install_owner_dashboard
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
@@ -414,4 +415,5 @@ def create_app(database_path=None, *, production_settings=None):
     install_orders(app, db, verified_user, membership, audit, email.transport, local_preview=not production)
     install_payments(app, db, verified_user, membership, audit)
     install_expenses(app, db, verified_user, membership, audit)
+    install_owner_dashboard(app, db, verified_user, membership)
     return app

@@ -21,7 +21,8 @@ def generate():
         path = Path(directory) / 'schema.sqlite3'
         create_app(path)
         with closing(sqlite3.connect(path)) as connection:
-            objects = connection.execute("SELECT sql FROM sqlite_master WHERE type IN ('table','index') AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END,rowid").fetchall()
+            # Freeze migration 001; later additive tables belong in migration 002.
+            objects = connection.execute("SELECT sql FROM sqlite_master WHERE type IN ('table','index') AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND tbl_name NOT IN ('receipt_extractions','expense_extractions') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END,rowid").fetchall()
     statements = []
     for (sql,) in objects:
         sql = re.sub(r'\bINTEGER\b', 'BIGINT', sql, flags=re.I)

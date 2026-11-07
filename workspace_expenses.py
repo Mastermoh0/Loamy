@@ -8,11 +8,20 @@ from io import BytesIO
 import json
 import secrets
 import time
+import threading
 
 from fastapi import Depends, HTTPException, Response
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from workspace_finances import FinancialInput, VoidInput, money
+from workspace_receipt_reader import read_receipt, parse_receipt, ReceiptReadError
+
+READER_LOCK = threading.BoundedSemaphore(1)
+
+
+class ExtractionInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    receipt_base64: str = Field(min_length=8, max_length=2800000)
 
 
 class ExpenseInput(BaseModel):
@@ -24,6 +33,7 @@ class ExpenseInput(BaseModel):
     occurred_on: date
     receipt_base64: str = Field(min_length=8, max_length=2800000)
     idempotency_key: str = Field(min_length=16, max_length=80, pattern=r'^[a-zA-Z0-9_-]+$')
+    extraction_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
 
     @field_validator('occurred_on')
     @classmethod
@@ -83,6 +93,16 @@ def install_expenses(app, db, verified_user, membership, audit):
             business_id TEXT NOT NULL REFERENCES businesses(id),actor_id TEXT NOT NULL REFERENCES users(id),
             idempotency_key TEXT NOT NULL,expense_id TEXT NOT NULL REFERENCES expense_submissions(id),PRIMARY KEY(business_id,actor_id,idempotency_key)
           );
+          CREATE TABLE IF NOT EXISTS receipt_extractions (
+            id TEXT PRIMARY KEY,business_id TEXT NOT NULL REFERENCES businesses(id),location_id TEXT NOT NULL REFERENCES locations(id),
+            actor_id TEXT NOT NULL REFERENCES users(id),receipt_hash TEXT NOT NULL,created_at REAL NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('pending','success','failed')),engine TEXT,result TEXT
+          );
+          CREATE INDEX IF NOT EXISTS receipt_extraction_actor_time ON receipt_extractions(actor_id,created_at);
+          CREATE TABLE IF NOT EXISTS expense_extractions (
+            expense_id TEXT NOT NULL,revision INTEGER NOT NULL,extraction_id TEXT NOT NULL REFERENCES receipt_extractions(id),
+            PRIMARY KEY(expense_id,revision),FOREIGN KEY(expense_id,revision) REFERENCES expense_versions(expense_id,revision)
+          );
         ''')
 
     base = '/enterprise-api/businesses/{business_id}/locations/{location_id}/expenses'
@@ -112,12 +132,19 @@ def install_expenses(app, db, verified_user, membership, audit):
         raw, mime, extension = receipt_bytes(data.receipt_base64)
         digest = hashlib.sha256(raw).hexdigest()
         values = (data.vendor, data.purpose, data.category, int(data.amount * 100), data.occurred_on.isoformat())
-        signature = hashlib.sha256(json.dumps([*values, digest]).encode()).hexdigest()
+        signature = hashlib.sha256(json.dumps([*values, digest, *([data.extraction_id] if data.extraction_id else [])]).encode()).hexdigest()
         return values, raw, mime, extension, digest, signature
 
     def insert_version(conn, eid, revision, data, values):
         fields, raw, mime, extension, digest, signature = values
+        if data.extraction_id:
+            extraction = conn.execute('SELECT * FROM receipt_extractions WHERE id=?', (data.extraction_id,)).fetchone()
+            expense = conn.execute('SELECT business_id,location_id,submitter_id FROM expense_submissions WHERE id=?', (eid,)).fetchone()
+            if not extraction or extraction['status'] != 'success' or (extraction['business_id'], extraction['location_id'], extraction['actor_id'], extraction['receipt_hash']) != (expense['business_id'], expense['location_id'], expense['submitter_id'], digest):
+                raise HTTPException(422, 'Extraction must belong to you, this location and this exact receipt')
         conn.execute('INSERT INTO expense_versions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)', (eid, revision, *fields, raw, mime, extension, digest, time.time(), data.idempotency_key, signature))
+        if data.extraction_id:
+            conn.execute('INSERT INTO expense_extractions VALUES (?,?,?)', (eid, revision, data.extraction_id))
 
     def public(conn, row):
         current = conn.execute('SELECT * FROM expense_versions WHERE expense_id=? AND revision=?', (row['id'], row['revision'])).fetchone()
@@ -127,6 +154,8 @@ def install_expenses(app, db, verified_user, membership, audit):
         result['versions'] = [{**dict(item), 'amount': money(item['amount_minor'])} for item in conn.execute('SELECT revision,vendor,purpose,category,occurred_on,amount_minor,receipt_hash FROM expense_versions WHERE expense_id=? ORDER BY revision', (row['id'],))]
         for item in result['versions']:
             item.pop('amount_minor')
+            extracted = conn.execute('SELECT x.engine,x.result FROM expense_extractions e JOIN receipt_extractions x ON x.id=e.extraction_id WHERE e.expense_id=? AND e.revision=?', (row['id'], item['revision'])).fetchone()
+            item['extraction'] = {'engine': extracted['engine'], **json.loads(extracted['result'])} if extracted else None
         if row['record_id']:
             ledger = conn.execute('SELECT status,void_reason FROM financial_records WHERE id=?', (row['record_id'],)).fetchone()
             result['ledger_status'], result['ledger_void_reason'] = ledger['status'], ledger['void_reason']
@@ -152,6 +181,43 @@ def install_expenses(app, db, verified_user, membership, audit):
             scope(conn, business_id, location_id, actor, review=True)
             rows = conn.execute("SELECT r.id,r.description,r.amount_minor,r.occurred_on,r.source,u.name recorded_by,e.id expense_id,e.revision expense_revision,s.name submitter FROM financial_records r JOIN users u ON u.id=r.actor_id LEFT JOIN expense_submissions e ON e.record_id=r.id LEFT JOIN users s ON s.id=e.submitter_id WHERE r.business_id=? AND r.location_id=? AND r.direction='expense' AND r.status='posted' AND lower(r.category)=lower(?) ORDER BY r.occurred_on DESC", (business_id, location_id, category)).fetchall()
             return {'records': [{**{key: row[key] for key in row.keys() if key != 'amount_minor'}, 'amount': money(row['amount_minor'])} for row in rows]}
+
+    @app.post(base + '/extract')
+    def extract_receipt(business_id: str, location_id: str, data: ExtractionInput, actor=Depends(verified_user)):
+        with db() as conn:
+            scope(conn, business_id, location_id, actor)
+        raw, mime, _ = receipt_bytes(data.receipt_base64)
+        digest = hashlib.sha256(raw).hexdigest()
+        with db() as conn:
+            scope(conn, business_id, location_id, actor)
+            cached = conn.execute("SELECT id,result,engine FROM receipt_extractions WHERE business_id=? AND location_id=? AND actor_id=? AND receipt_hash=? AND status='success' ORDER BY created_at DESC LIMIT 1", (business_id, location_id, actor['id'], digest)).fetchone()
+            if cached:
+                return {'id': cached['id'], 'engine': cached['engine'], **json.loads(cached['result'])}
+            attempts = conn.execute('SELECT count(*) FROM receipt_extractions WHERE actor_id=? AND created_at>?', (actor['id'], time.time() - 3600)).fetchone()[0]
+            if attempts >= 10:
+                raise HTTPException(429, 'Receipt reading limit reached. Try again in an hour or enter details manually.')
+        if not READER_LOCK.acquire(blocking=False):
+            raise HTTPException(429, 'Receipt reader is busy. Please try again shortly.')
+        xid = secrets.token_hex(16)
+        try:
+            with db() as conn:
+                scope(conn, business_id, location_id, actor)
+                if conn.execute('SELECT count(*) FROM receipt_extractions WHERE actor_id=? AND created_at>?', (actor['id'], time.time() - 3600)).fetchone()[0] >= 10:
+                    raise HTTPException(429, 'Receipt reading limit reached. Enter details manually or try again later.')
+                conn.execute('INSERT INTO receipt_extractions VALUES (?,?,?,?,?,?,?,NULL,NULL)', (xid, business_id, location_id, actor['id'], digest, time.time(), 'pending'))
+            try:
+                text, engine = read_receipt(raw, mime)
+                result = parse_receipt(text)
+            except ReceiptReadError as error:
+                with db() as conn:
+                    conn.execute("UPDATE receipt_extractions SET status='failed' WHERE id=?", (xid,))
+                raise HTTPException(503, str(error))
+            with db() as conn:
+                scope(conn, business_id, location_id, actor)
+                conn.execute("UPDATE receipt_extractions SET status='success',engine=?,result=? WHERE id=?", (engine, json.dumps(result), xid))
+            return {'id': xid, 'engine': engine, **result}
+        finally:
+            READER_LOCK.release()
 
     @app.post(base, status_code=201)
     def submit_expense(business_id: str, location_id: str, data: ExpenseInput, actor=Depends(verified_user)):

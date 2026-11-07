@@ -60,6 +60,7 @@ class PostgresReleaseTests(unittest.TestCase):
             admin.execute('CREATE TABLE IF NOT EXISTS public.loamy_rehearsal_sentinel (id INT PRIMARY KEY)')
             admin.execute('INSERT INTO public.loamy_rehearsal_sentinel VALUES (1) ON CONFLICT DO NOTHING')
             admin.execute((ROOT / 'scripts/sql/enterprise/001_enterprise.sql').read_text())
+            admin.execute((ROOT / 'scripts/sql/enterprise/002_receipt_extraction.sql').read_text())
         self.env = patch.dict(os.environ, ProductionConfigTests().settings(LOAMY_WORKSPACE_WEB_ORIGIN='https://workspace.example.test',
                             LOAMY_WORKSPACE_API_ORIGIN='https://workspace.example.test', LOAMY_WORKSPACE_DATABASE_URL=self.app_dsn))
         self.env.start()
@@ -182,6 +183,10 @@ class PostgresReleaseTests(unittest.TestCase):
         buffer = BytesIO(); Image.new('RGB', (20, 20), 'green').save(buffer, format='PNG')
         payload = {'vendor': 'Test store', 'purpose': 'Fictional supplies', 'category': 'Supplies', 'amount': '1000.10',
                    'occurred_on': datetime.now(timezone(timedelta(hours=1))).date().isoformat(), 'receipt_base64': base64.b64encode(buffer.getvalue()).decode(), 'idempotency_key': secrets.token_hex(16)}
+        with patch('workspace_expenses.read_receipt', return_value=('TEST STORE\nTotal NGN 1000.10', 'rehearsal-reader')):
+            extraction = staff.post(self.base + '/expenses/extract', json={'receipt_base64': payload['receipt_base64']})
+        self.assertEqual(extraction.status_code, 200, extraction.text)
+        payload['extraction_id'] = extraction.json()['id']
         response = staff.post(self.base + '/expenses', json=payload)
         self.assertEqual(response.status_code, 201, response.text)
         eid = response.json()['id']
@@ -193,7 +198,12 @@ class PostgresReleaseTests(unittest.TestCase):
         listed = self.owner.get(self.base + '/expenses')
         self.assertEqual(listed.status_code, 200, listed.text)
         self.assertEqual(listed.json()['categories'][0]['amount'], '1000.10')
+        self.assertEqual(listed.json()['expenses'][0]['versions'][0]['extraction']['engine'], 'rehearsal-reader')
         self.assertEqual(staff.get(self.base + f'/expenses/{eid}/receipt/1').content, buffer.getvalue())
+        dashboard = self.owner.get(f'/enterprise-api/businesses/{self.bid}/owner-dashboard')
+        self.assertEqual(dashboard.status_code, 200, dashboard.text)
+        self.assertEqual((dashboard.json()['totals']['outflow'], dashboard.json()['totals']['outstanding']), ('1000.10', '50000.00'))
+        self.assertEqual(staff.get(f'/enterprise-api/businesses/{self.bid}/owner-dashboard').status_code, 403)
 
 
 if __name__ == '__main__':

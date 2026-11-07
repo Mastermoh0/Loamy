@@ -35,7 +35,7 @@ for command in commands:
 restored_dsn = f'postgresql://loamy_enterprise_app:{quote(password)}@127.0.0.1:55432/{name}?{query}'
 with psycopg.connect(restored_dsn) as restored:
     actual = restored.execute('SELECT count(*) FROM enterprise.users').fetchone()[0]
-    version = restored.execute('SELECT version FROM enterprise.schema_migrations').fetchone()[0]
-    if actual != expected or version != '001_enterprise' or snapshot(restored) != original:
+    version = restored.execute('SELECT version FROM enterprise.schema_migrations ORDER BY version DESC LIMIT 1').fetchone()[0]
+    if actual != expected or version != '002_receipt_extraction' or snapshot(restored) != original:
         raise RuntimeError('Restored data or migration version differs')
 print(f'Backup/restore passed: all {len(original)} tables, including receipt/PDF bytes and financial rows, match; source unchanged.')
