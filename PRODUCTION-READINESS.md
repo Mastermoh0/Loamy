@@ -50,7 +50,7 @@ The original Capacitor/iOS asset-generation dependency chain still has four mode
 
 ## Reproduce the rehearsal
 
-The CI workflow is prepared in the working branch; GitHub Actions has not run in this session because no code has been pushed. The checks described above were executed locally.
+The implementation is published on the fork's `mohammeds-branch` (initial feature commit `3294da8`). The CI workflow is prepared, but no remote GitHub Actions run was triggered/verified by this work. It is configured for pull requests/manual dispatch rather than this branch push alone. The checks described above were executed locally; see `SAMUEL-PRODUCTION-HANDOFF.md` for publication and later validation records.
 
 Use Docker Desktop/Engine, Node 22 and Python 3.14. Install `requirements-rehearsal.txt` into an isolated environment and run `npm ci`. Generate a random `POSTGRES_TEST_PASSWORD` into `.local-data/postgres-test.env`; never commit it. Then:
 

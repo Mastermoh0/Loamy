@@ -11,9 +11,11 @@ Last updated: **7 November 2026, Africa/Lagos**.
 | Development fork | https://github.com/Mastermoh0/Loamy |
 | Working branch | `mohammeds-branch` |
 | Base commit inspected | `cd6d768`; this identifies the base, **not a commit containing the new implementation** |
-| Implementation location at this update | Publication to the development fork has been requested. The verified implementation commit and GitHub publication record will be recorded below after the upload succeeds. No upstream merge or deployment is authorized by this handoff. |
+| Implementation location at this update | Published to `Mastermoh0/Loamy:mohammeds-branch`; feature commit `3294da82ab452052969ff4a9ba32f7ea6225d469` was verified against the remote branch. Later handoff updates follow in the branch history. No upstream merge or deployment has been performed. |
 | Current readiness | New business workflows implemented; local production rehearsal passed. Real staging integration and owner release approval remain. |
 | Access used | Local development and disposable rehearsal infrastructure only; no access to Samuel's production backend/database. |
+
+Published implementation: [feature commit 3294da8](https://github.com/Mastermoh0/Loamy/commit/3294da82ab452052969ff4a9ba32f7ea6225d469). Current handoff: [SAMUEL-PRODUCTION-HANDOFF.md on the development branch](https://github.com/Mastermoh0/Loamy/blob/mohammeds-branch/SAMUEL-PRODUCTION-HANDOFF.md). Review later branch commits as well as the initial feature commit.
 
 ## 1. Read this first
 
@@ -157,7 +159,7 @@ Real email configuration and a controlled mailbox are required for verification/
 
 ## 6. Merge and production integration order
 
-1. **Make the implementation reviewable.** Inspect `git status --short`: much of the implementation was still untracked at this update. Commit/include the intended source, migration, lockfiles, tests and handoff before opening a PR from `Mastermoh0/Loamy:mohammeds-branch` to the original repo. This document alone does not transfer the feature code.
+1. **Review the published implementation.** The feature code, migration, lockfiles, tests and handoff are included in the published feature commit linked above. Review the complete branch diff and any later commits before opening a PR from `Mastermoh0/Loamy:mohammeds-branch` to the original repo. Inspect `git status --short` for new unpublished changes before adding further work. No PR has been opened by this publication.
 2. **Refresh against upstream in an isolated review branch/worktree.** Review both sides of changes to `package.json`/lockfile, routing, sign-in entry points, mobile navigation, Vite configuration, framework requirements and CI. Do not overwrite upstream improvements wholesale.
 3. **Choose identity and canonical-data integration.** Resolve the decisions above before wiring real memberships, transactions or Gmail connections into these screens. Keep the original personal flows working.
 4. **Provision separate staging.** Create a migration owner and a strong-secret `loamy_enterprise_app` LOGIN role without admin privileges. The application must not use the owner or a browser/service-role key as a substitute.
@@ -203,7 +205,7 @@ Last recorded successful run: **7 November 2026**. This document records earlier
 | Production dependency audits | No known advisories reported after patches | Time-specific audit; rerun before release |
 | Mobile tooling audit | Four moderate development-tool advisories remain documented | Original Capacitor/iOS asset-generation chain; not deployed in the business web runtime |
 | Real provider email, public DNS/TLS, real bank/Gmail integration | Not verified | Requires Samuel's environment/access and representative data |
-| GitHub Actions | Workflow prepared, not run remotely in this work | No push/PR/release was performed |
+| GitHub Actions | Workflow prepared; remote execution not triggered/verified by this work | Branch pushed; no PR, upstream merge or release created. The release workflow runs on pull requests/manual dispatch, not this branch push alone. |
 
 Local preview:
 
@@ -275,10 +277,12 @@ The root `AGENTS.md` reinforces this maintenance requirement for future work in 
 | Date | Change | Validation represented |
 |---|---|---|
 | 7 November 2026 | Initial consolidated handoff: business/roles/verification, ledger, catalogue/orders, invoices/email, payment allocations, staff receipts/review/categories and production candidate | Documents prior 39-case release rehearsal, build/audits/container/restore results; no new runtime tests required for this documentation-only addition |
+| 7 November 2026 | Published the complete implementation to the fork's `mohammeds-branch` in feature commit `3294da8`; added detailed feature/validation commit notes and ongoing publication instructions | Fresh pre-push run: 35 workflow/configuration cases, targeted frontend lint and business-only build passed. The PostgreSQL-specific rehearsal cases were not rerun for this publication; their prior results remain recorded above. Remote feature-commit SHA verified. |
 
 ## 12. Release acceptance record — fill only after verification
 
-- Incoming PR and implementation commit: **Pending**.
+- Implementation commit: **Published and verified: `3294da82ab452052969ff4a9ba32f7ea6225d469`**; inspect subsequent branch history for documentation/future updates.
+- Incoming upstream PR: **Not opened**.
 - Identity/account-recovery decision: **Pending Samuel**.
 - Staging host/database and applied migration version: **Pending**.
 - Real verification/invoice mailbox checks: **Pending**.
