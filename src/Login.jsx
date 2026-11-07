@@ -224,6 +224,7 @@ const Login = () => {
                     Don&apos;t have an account?{" "}
                     <span onClick={handleSignUp}>Sign Up</span>
                 </p>
+                {import.meta.env.DEV && <p className="signup-link"><a href="/business">Try the new business workspace</a></p>}
             </div>
         </div>
     );

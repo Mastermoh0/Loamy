@@ -1,0 +1,13 @@
+.git
+.env
+.env.*
+.local-data
+.venv
+node_modules
+dist
+output
+__pycache__
+*.pyc
+*.sqlite3
+*.pem
+*.key

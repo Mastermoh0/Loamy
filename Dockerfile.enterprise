@@ -1,0 +1,20 @@
+FROM node:22-bookworm-slim AS frontend
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY index.html vite.config.js ./
+COPY src ./src
+ENV VITE_ENTERPRISE_ENABLED=true VITE_ENTERPRISE_ONLY=true
+RUN npm run build
+
+FROM python:3.14-slim-bookworm
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 LOAMY_WORKSPACE_SERVE_DIST=1
+WORKDIR /app
+COPY requirements-production.lock ./
+RUN pip install --no-cache-dir -r requirements-production.lock && useradd --uid 10001 --create-home workspace
+COPY enterprise_preview.py enterprise_production.py enterprise_static.py workspace_*.py ./
+COPY --from=frontend /app/dist ./dist
+USER workspace
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health/ready',timeout=3)"
+CMD ["python", "-m", "uvicorn", "enterprise_production:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080", "--limit-concurrency", "40", "--no-server-header"]

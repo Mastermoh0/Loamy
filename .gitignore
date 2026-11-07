@@ -24,5 +24,8 @@ dist-ssr
 *.sw?
 
 .env
+.env.*
 __pycache__/
 .vercel
+.venv/
+.local-data/

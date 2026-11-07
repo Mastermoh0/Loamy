@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_TEST_PASSWORD:?Set POSTGRES_TEST_PASSWORD in the ignored test env file}
+      POSTGRES_DB: enterprise_test
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - ./.local-data/postgres-certs:/test-certs:ro
+    entrypoint: ["/bin/bash", "-ec"]
+    command:
+      - |
+        cp /test-certs/server.key /tmp/server.key
+        cp /test-certs/server.crt /tmp/server.crt
+        chown postgres:postgres /tmp/server.key /tmp/server.crt
+        chmod 600 /tmp/server.key
+        exec /usr/local/bin/docker-entrypoint.sh postgres -c ssl=on -c ssl_cert_file=/tmp/server.crt -c ssl_key_file=/tmp/server.key
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d enterprise_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

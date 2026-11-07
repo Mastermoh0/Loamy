@@ -17,7 +17,7 @@ import { getSessionUserId } from "../services/bankService";
 
 // Auth, onboarding and Chat go without the tab bar. Chat needs the full height
 // for the composer, and it has its own back button and menu in the header.
-const HIDDEN_ON = ["/", "/signup", "/onboarding", "/chat"];
+const HIDDEN_ON = ["/", "/signup", "/onboarding", "/chat", "/business"];
 const MORE_ROUTES = ["/accounts", "/settings", "/gmail-connect"];
 const REFRESH_MS = 60_000;
 
