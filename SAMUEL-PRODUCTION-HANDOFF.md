@@ -2,7 +2,7 @@
 
 > **Living handoff for Samuel, his team and his AI agents.** Update this file after each meaningful feature or integration change. It is an implementation map and release checklist, not evidence that a live deployment has happened.
 
-Last updated: **7 November 2026, Africa/Lagos**.
+Last updated: **8 November 2026, Africa/Lagos**.
 
 | Item | Current position |
 |---|---|
@@ -28,7 +28,7 @@ There are **two distinct execution modes**:
 
 The candidate intentionally keeps business accounts separate from the original personal-app accounts. It does not import the original `main.py`/Gmail backend or trust a personal-app `localStorage` user ID. Merging the code alone does **not** unify identity, financial records or bank connections.
 
-The recorded test cases and release rehearsal validate the stated paths. They are not a certification of the original application's entire security, mobile builds or unknown production configuration. See section 13 for the newest supplier/WhatsApp changes and validation; earlier counts are historical.
+The recorded test cases and release rehearsal validate the stated paths. They are not a certification of the original application's entire security, mobile builds or unknown production configuration. See section 14 for the newest customer-message, insight and export changes; earlier counts are historical.
 
 ## 2. What is implemented
 
@@ -53,6 +53,10 @@ The recorded test cases and release rehearsal validate the stated paths. They ar
 | Offline receipt extraction | JPEG/PNG, text PDF and scanned PDF suggestions for vendor, total and date; editable draft, exact-file provenance and independent approval | Install native OCR tools; assess representative receipts in staging and agree retention/resource limits |
 | Supplier invoices/payables | Private original invoice imports, exact liabilities/due dates, duplicate guards, partial/split allocations to existing expense debits, reversals and reasoned voids; current owner payables | Confirm real supplier references, payment evidence and operating policy; no funds transfer or full accrual accounting |
 | WhatsApp receipt intake | Operator-scoped signed incoming webhooks, verified-account sender linking, durable media queue/worker, private inbox and editable expense drafts with original evidence | Configure Meta app/business number/token/version/routing, supervise worker, validate real provider receipts; group capture remains disabled |
+| Customer notices | Reviewed partial-payment updates and overdue email drafts, current-balance recheck, capture/SMTP delivery history and uncertainty/duplicate guards | Real staging mail acceptance and recipient/policy checks; no automatic reminder scheduler or unreviewed sends |
+| Customer invoice links | Expiring/revocable bearer link, customer invoice/PDF view and current balance, native share/copy handoff | Approve bearer-link privacy and public HTTPS hosting; no automatic WhatsApp/SMS delivery |
+| Financial insights | Owner cash-burn/runway scenario, invoice-level debtors, evidence-backed recurring candidates and tracked subscriptions | Confirm data completeness/cash input and operating assumptions; no live bank balance or automatic external cancellation |
+| Financial history exports | Scoped ZIP with CSV summary/ledger/current balances/allocations/evidence references, manifest/checksums and optional originals | Accept report scope/retention, client download limits and spreadsheet handling in staging |
 | Production foundation | Private PostgreSQL migration, least-privilege role, serializable writes, secure configuration, container/health checks, dependency lock and release CI definition | Actual staging deployment, provider configuration, backups/alerts and release approval |
 
 ### Role boundaries
@@ -104,6 +108,9 @@ All paths in this document are repository-relative, so the handoff works on anot
 | `workspace_suppliers.py`, `src/WorkspaceSuppliers.jsx` | Supplier invoice snapshots, liabilities and existing-debit payment allocation UI/API |
 | `workspace_whatsapp.py`, `src/WorkspaceWhatsApp.jsx`, `scripts/process_whatsapp_inbox.py` | Sender identity, signed intake, durable private receipt queue/inbox, bounded media transport and separately supervised worker |
 | `scripts/sql/enterprise/003_supplier_whatsapp.sql` | Five additive private intake/payables tables, restricted grants and retrieved-evidence immutability trigger |
+| `workspace_notifications.py`, `src/WorkspaceNotifications.jsx`, `src/WorkspaceInvoiceShare.jsx`, `src/CustomerInvoice.jsx` | Reviewed transactional notices and revocable customer-facing invoice links |
+| `workspace_reports.py`, `src/WorkspaceReports.jsx`, `src/services/workspaceDownloads.js` | Cash scenarios, debtors/recurrence/subscription tracking, bounded report/evidence downloads |
+| `scripts/sql/enterprise/004_reports_notifications.sql` | Additive notice/share/recurring-commitment tables and restricted update grants |
 | `scripts/sql/enterprise/002_receipt_extraction.sql` | Additive extraction/provenance tables and restricted grants, following unchanged migration 001 |
 | `src/BusinessWorkspace.jsx`, `src/BusinessWorkspace.css` | Workspace shell, business switching and role navigation |
 | `src/WorkspaceVerification.jsx`, `src/WorkspaceFinances.jsx` | Verification and location ledger UI |
@@ -136,7 +143,7 @@ The root is `/enterprise-api`. Exact request models and status handling are in t
 
 ### Data ownership
 
-The PostgreSQL schema contains 33 tables including migration tracking (26 from 001, two from 002 and five from 003):
+The PostgreSQL schema contains 36 tables including migration tracking (26 from 001, two from 002, five from 003 and three from 004):
 
 - Identity/access: `users`, `sessions`, `businesses`, `locations`, `memberships`, `invitations`, `audit_events`, `login_attempts`.
 - Verification: `email_verifications`, `mail_outbox`.
@@ -148,6 +155,7 @@ The PostgreSQL schema contains 33 tables including migration tracking (26 from 0
 - Extraction/provenance: `receipt_extractions`, `expense_extractions`.
 - Supplier payables: `supplier_bills`, `supplier_payments`.
 - WhatsApp intake: `whatsapp_challenges`, `whatsapp_senders`, `whatsapp_messages`.
+- Reporting/communication: `customer_notices`, `invoice_shares`, `recurring_commitments`.
 - Release tracking: `schema_migrations`.
 
 Receipts and original PDFs are private durable database bytes. The runtime does not depend on writable container disk. Backups, retention, encryption and connection capacity still need the actual provider's operating policy.
@@ -176,7 +184,7 @@ Real email configuration and a controlled mailbox are required for verification/
 2. **Refresh against upstream in an isolated review branch/worktree.** Review both sides of changes to `package.json`/lockfile, routing, sign-in entry points, mobile navigation, Vite configuration, framework requirements and CI. Do not overwrite upstream improvements wholesale.
 3. **Choose identity and canonical-data integration.** Resolve the decisions above before wiring real memberships, transactions or Gmail connections into these screens. Keep the original personal flows working.
 4. **Provision separate staging.** Create a migration owner and a strong-secret `loamy_enterprise_app` LOGIN role without admin privileges. The application must not use the owner or a browser/service-role key as a substitute.
-5. **Review/apply the private migrations.** On a new schema apply `scripts/sql/enterprise/001_enterprise.sql`, then `002_receipt_extraction.sql` and `003_supplier_whatsapp.sql` as the migration owner. On a previously migrated database apply only missing forward migrations after backup/review. Runtime now requires `003_supplier_whatsapp`. An unexpected existing schema requires inspection, not a `DROP SCHEMA` shortcut. Keep it out of the Supabase Data API. Add forward migrations rather than editing applied history.
+5. **Review/apply the private migrations.** On a new schema apply `scripts/sql/enterprise/001_enterprise.sql`, then `002_receipt_extraction.sql`, `003_supplier_whatsapp.sql` and `004_reports_notifications.sql` as the migration owner. On a previously migrated database apply only missing forward migrations after backup/review. Runtime now requires `004_reports_notifications`. An unexpected existing schema requires inspection, not a `DROP SCHEMA` shortcut. Keep it out of the Supabase Data API. Add forward migrations rather than editing applied history.
 6. **Configure secrets and build.** Follow `enterprise.env.example` and `deploy/ENTERPRISE-RUNBOOK.md`. Use real provider certificate verification and SMTP. Enable `VITE_ENTERPRISE_ENABLED=true`; the separate candidate also uses `VITE_ENTERPRISE_ONLY=true`. Never deploy `npm run dev:workspace` or use captured verification in production.
 7. **Run the complete checks in staging.** Repeat the automated suite and test real browser HTTPS/cookies, provider mail arrival, representative receipts, receiving-account/source ownership and cross-business isolation. A merge/build alone is not acceptance.
 8. **Pilot and release.** Agree backup/recovery/monitoring, approve the same tested image digest and release a small pilot. Keep a schema-compatible prior image available. Application rollback must not delete financial history; agree a forward-fix/recovery procedure if the previous image is incompatible.
@@ -235,13 +243,13 @@ Open `http://127.0.0.1:5173/business`. This is local test data, not production.
 Basic workflow checks, after installing the appropriate isolated dependencies:
 
 ```text
-python -m unittest test_workspace_features test_workspace_orders test_workspace_invoices test_workspace_payments test_workspace_expenses test_workspace_owner test_workspace_receipts test_workspace_suppliers test_workspace_whatsapp -v
+python -m unittest test_workspace_features test_workspace_orders test_workspace_invoices test_workspace_payments test_workspace_expenses test_workspace_owner test_workspace_receipts test_workspace_suppliers test_workspace_whatsapp test_workspace_notifications test_workspace_reports -v
 ```
 
 For the full release rehearsal, follow `PRODUCTION-READINESS.md` and `.github/workflows/enterprise-release-rehearsal.yml`: install `requirements-rehearsal.txt` and native OCR tools (or the explicitly configured local Docker reader), generate ignored random test credentials/certificates, start the disposable TLS PostgreSQL service, build the business-only frontend and set `LOAMY_RUN_POSTGRES_TESTS=1` and `LOAMY_RUN_OCR_TESTS=1` before:
 
 ```text
-python -m unittest test_workspace_features test_workspace_orders test_workspace_invoices test_workspace_payments test_workspace_expenses test_workspace_owner test_workspace_receipts test_workspace_suppliers test_workspace_whatsapp test_enterprise_production -v
+python -m unittest test_workspace_features test_workspace_orders test_workspace_invoices test_workspace_payments test_workspace_expenses test_workspace_owner test_workspace_receipts test_workspace_suppliers test_workspace_whatsapp test_workspace_notifications test_workspace_reports test_enterprise_production -v
 python scripts/rehearse_enterprise_restore.py
 docker build -f Dockerfile.enterprise -t loamy-enterprise:rehearsal .
 python scripts/rehearse_enterprise_container.py
@@ -258,9 +266,9 @@ Do not mark these as implemented merely because related legacy code exists elsew
 - Real identity linking/account recovery as chosen by Samuel; existing-user/business/financial-data migration.
 - Automatic invitation email and verified real provider delivery/monitoring.
 - Authorized Gmail/bank ingestion into the scoped canonical ledger, with source uniqueness and real matching fixtures.
-- Automatic settlement, real bank refunds/transfers and customer payment reminders.
+- Automatic settlement, real bank refunds/transfers and unattended reminder campaigns.
 - Live WhatsApp account/provider acceptance and group capture (disabled); broader receipt formats/languages, supplier credits/refunds and accrual-accounting integration.
-- Source-backed AI insights, financial-history exports and historical receivables snapshots. The consolidated owner overview is implemented; these additional reporting capabilities are not.
+- Generative AI advice, automatic reminder scheduling, direct outbound WhatsApp/SMS and historical period-end receivables snapshots. Deterministic recorded insights, reviewed email notices, customer invoice links and financial-history exports are now implemented.
 - Service inventory/room availability, tax/discount rules, POS integration, QR linking and broader currency/bank support unless separately implemented later.
 - Mobile release/tooling follow-up and full regression/security review of the original personal backend when integrated.
 
@@ -331,6 +339,7 @@ The root `AGENTS.md` reinforces this maintenance requirement for future work in 
 | 7 November 2026 | Published the complete implementation to the fork's `mohammeds-branch` in feature commit `3294da8`; added detailed feature/validation commit notes and ongoing publication instructions | Fresh pre-push run: 35 workflow/configuration cases, targeted frontend lint and business-only build passed. The PostgreSQL-specific rehearsal cases were not rerun for this publication; their prior results remain recorded above. Remote feature-commit SHA verified. |
 | 7 November 2026 | Added consolidated owner overview and offline receipt extraction with version-bound suggestions; additive migration 002 and deployment/CI documentation | 47 backend tests passed with real OCR and PostgreSQL enabled; lint/build, real desktop/mobile workflow, 28-table restore and updated restricted production container/OCR rehearsal passed. Publication is represented by this feature/handoff commit in branch history. |
 | 7 November 2026 | Added supplier invoice liabilities/payment allocations and WhatsApp private receipt intake/worker, simulation and sender linking; forward migration 003 and operator setup notes | 60 backend tests passed with no skips; real OCR, PostgreSQL concurrency/evidence/upgrade checks, 33-table restore and restricted container rehearsal passed. Actual WhatsApp transport remains mocked and requires owner-side acceptance. |
+| 8 November 2026 | Added reviewed customer notices, expiring invoice links/customer page, recorded owner insights/subscription tracking and scoped financial-history/evidence ZIP exports; forward migration 004 | 76 backend tests passed with real OCR/PostgreSQL; 36-table recovery, restricted image rehearsal, lint/build and desktop/mobile browser flows passed. SMTP was mocked/captured; no customer messages or live deployment. |
 
 ## 13. Supplier invoices and WhatsApp receipt intake — 7 November 2026
 
@@ -366,7 +375,50 @@ This implements inbound private-message receipt intake, with **live access disab
 - Backup/restore compared all **33 tables** including private bytes and financial rows; source unchanged. Rebuilt non-root/read-only production image passed TLS database, readiness/frontend, Host/HTTP/config rejection and actual packaged OCR checks. Targeted UI lint/build passed; the UI detector reported no findings. Browser imported a fictional NGN 1,000.10 invoice, matched its existing NGN 450.05 expense debit and showed NGN 550.05 owed without another cash entry. The simulated WhatsApp inbox preserved receipt/caption through OCR and expense submission, stayed explicitly labelled as simulated and required a different reviewer. Both screens were inspected at desktop/mobile widths with no horizontal document overflow; local evidence lives under `../output/loamy-study/supplier-bills-*.png` and `whatsapp-inbox-*.png`. The preview was restarted after final backend changes with fictional evidence retained.
 - No real WhatsApp connection/message, bank transfer, live customer data, production migration/deployment or upstream merge was performed. Samuel's staging/provider setup, retention, worker operations and owner acceptance remain release gates.
 
-## 14. Release acceptance record — fill only after verification
+## 14. Customer notices, insights and history exports — 8 November 2026
+
+### Customer notices and additional invoice delivery
+
+`Customer messages` is scoped to verified owner/manager/finance membership; non-owners remain at their assigned location. GET `/businesses/{business_id}/locations/{location_id}/customer-notifications` lists current partial-payment/overdue candidates and the latest 100 private drafts/delivery attempts (5,000 issued-invoice view limit). Partial updates require a positive remaining balance and a partial allocation; overdue requires a due date before Lagos today. Fully paid, overpaid and cancelled invoices are ineligible. This release is **review-and-confirm**, not a background scheduler or automatic message on every allocation.
+
+POST prepares an immutable subject/body with exact invoice total, allocated and remaining amounts, due date, payment instructions and timestamp. Recipient validation reuses the single-email validator. Draft creation sends nothing. Request keys and per-day/kind/recipient/balance deduplication recover retries. The explicit `/{notice_id}/send` action rechecks current eligibility and an allocation fingerprint; changed balances require a fresh draft. Notice emails are capped at one per invoice/24 hours, with 30 new drafts per actor/hour. A definitely failed send needs explicit retry and a one-minute wait. Accepted, sending, captured or uncertain attempts are never blindly repeated. Local capture sends no email; production SMTP acceptance does not establish inbox arrival.
+
+An SMTP attempt reserves `sending` in a committed transaction before network work. Invoice allocation/reversal and cancellation APIs refuse conflicting changes during its 120-second send window. Interrupted/stale sends become `unknown` when history is refreshed; investigate before any later new notice. Exactly-once delivery cannot be guaranteed across a process/network interruption. Review recipients and real payment evidence in staging. No real customer email was sent during this implementation.
+
+Owners/managers/front desk can create invoice share links from the existing order/invoice panel. `/invoices/{invoice_id}/shares` returns a new random 256-bit token once; only its SHA-256 is stored. Links expire after 1–30 days and can be revoked. The URL uses `/customer-invoice#token=...`; the token stays out of ordinary HTTP URL/query logs and is posted in the request body. The customer view exposes only that invoice's issued details/PDF and current payment totals; no internal allocation notes, staff IDs, other invoices, receipts or workspace access. Invalid/expired/revoked tokens fail, and cancelled invoices refuse access/PDF download. The static customer page bypasses legacy personal-app activity syncing/navigation and uses the configured same-origin API.
+
+**Bearer-link privacy:** anyone with the complete link can view the invoice's customer details and recorded balance without a customer login. Staff must share privately and get the recipient right. Revocation cannot recall files/screenshots already downloaded. App/server origins remain validated; public token POSTs retain the approved Origin/Host/HTTPS checks. Tokens are never returned in link history, and production access logging remains disabled; ensure proxy/error/analytics logs do not record tokens/bodies. Native device sharing or copying hands the link to the operator's chosen channel; it does not prove delivery or implement direct outbound WhatsApp/SMS.
+
+### Recorded financial insights and subscriptions
+
+`POST /businesses/{business_id}/financial-insights` is owner-only and supports one/all owned locations with 30–366 completed calendar days, ending yesterday in Lagos time. It uses posted canonical ledger movements only; voids, open orders, allocations and unpaid supplier invoices do not become extra cash entries.
+
+- Net burn is `max(recorded expenses - recorded income, 0)` over the full selected day count. A runway scenario requires a nonnegative owner-entered available-cash amount plus explicit confirmation that history is complete. Positive burn yields `floor(entered cash minor units × days / net burn minor units)`. Without those inputs or positive net burn it is unavailable, not an invented bank balance or infinite runway. Zero entered cash yields zero days when burn is positive. The scenario is not persisted as a financial record.
+- Current debtors are issued invoice-level outstanding balances across all dates, with contact/due/overdue information. Contacts/names are not automatically merged into a customer identity. These are current allocations, not historical ageing at a selected end date.
+- Possible recurring expenses require matching location, normalized description/category and exact amount on at least three distinct dates. Gaps of 5–9 days suggest weekly; 25–35 suggest monthly. The UI shows dates and record IDs for review. These are unconfirmed patterns, not AI assertions or guaranteed subscriptions; changing amounts/descriptions and sparse history can prevent detection.
+- Owner-confirmed `recurring_commitments` track vendor, description, location, exact NGN amount, weekly/monthly/quarterly/yearly cadence and manually maintained next-due date. Creation is idempotent; an active matching vendor/description is rejected. Corrections retain cancellation history and add a replacement. Approximate monthly cost uses weekly ×52/12, monthly ×1, quarterly ÷3, yearly ÷12, rounding the total to cents. Tracking never posts expenses, adds costs again to historical burn, advances dates automatically or cancels an external supplier subscription.
+
+The UI explicitly labels the recorded-data/transfer/completeness limits. Owner-entered cash is not verified by a live bank feed. No generative model, investment advice, subscription billing API or live liquidity certification was added.
+
+### Downloadable financial history and original evidence
+
+`POST /businesses/{business_id}/financial-history/export` requires verified owner/manager/finance membership. Owners can choose one/all locations; non-owners are forced to their assigned location and cannot request another. Validate inclusive start/end dates (up to 366 days, no future end). ZIP downloads contain `summary.csv`, `ledger.csv`, current invoice balances, customer/supplier allocation histories, expense-version references, supplier-bill references, `README.txt` and a JSON manifest with coverage/totals/file SHA-256 checksums.
+
+Ledger rows use `occurred_on` in the selected range, retain voids/corrections and sum only posted entries in the summary. Current invoice balances include scoped invoices across all dates and are explicitly labelled current, not historical period-end receivables. Cancelled invoice amounts owed are zero in this report. Allocation/reference IDs join the report back to canonical records. Optional original files include invoices issued/allocated in the range, supplier invoices issued or paid through period debits, and all immutable receipt versions linked to period ledger records. Original files keep their issued form: consult CSV status before relying on a cancelled/voided document. Evidence versions are not extra cash movement.
+
+Unposted staff receipts, unrelated WhatsApp inbox contents, bank emails, credentials, sessions and identity tables are excluded. Bounds are 5,000 ledger records, 5,000 scoped invoice balances, 20,000 supporting metadata rows, 1,000 files and 25 MiB of originals, with one export per worker at a time. Oversized requests fail clearly instead of silently truncating; use fewer dates/one location or exclude original files. A private database transaction keeps metadata/files/totals consistent and audits the export without storing another report/ledger copy. Binary ZIP responses and API responses are non-cached. Files use generated IDs rather than customer filenames, unsafe archive paths are refused, and evidence lengths are checked before loading original bytes.
+
+CSV cells are quoted; formula-leading ASCII/full-width markers are prefixed for spreadsheet viewing and leading controls are escaped. See [OWASP CSV Injection](https://community.owasp.org/attacks/CSV_Injection): protection depends on spreadsheet/re-save behavior; preserve the guards and don't treat an edited CSV as authoritative ledger evidence. No claim of universally safe spreadsheet re-import or digitally notarized reports is made.
+
+### Integration, validation and release gates
+
+Apply forward migration **004_reports_notifications** after 003. Prior artifacts remain unchanged. It adds three private tables with immutable notice bodies/recipients, hashed share tokens and recurring amounts; the runtime role can update only delivery state, share revocation and tracked-cancellation state. The schema now has **36 tables**. Deploy the reviewed matching image only after migration acceptance; do not drop or overwrite Samuel's existing database. No new cloud provider/dependency is required beyond the existing SMTP service; use an HTTPS web/API origin that serves the customer page too.
+
+**76 backend tests passed, no skips**, with real OCR and isolated TLS PostgreSQL enabled. New checks covered exact runway inputs/math, recurring evidence/commitment history, current debtors, scoped exports/totals/original checksums, cancelled invoices/old supplier evidence, CSV markers/controls, report size/busy limits, draft deduplication/changed balances/overdue rules, send locks/retry/uncertainty, expiring/revoked shares, public PDF and exclusion of private fields. Mocked production SMTP exercised accepted and uncertain delivery and a concurrent allocation attempt during sending. Backup/restore matched all 36 tables including bytes and financial rows; the rebuilt restricted production image passed readiness/frontend/TLS/Host/HTTP/config/worker/OCR checks. Frontend lint/build passed; the UI detector found no issues. The browser exported a fictional date-range report, created a NGN 250.10 monthly tracked commitment without posting cash, and captured a reviewed partial-payment message for NGN 1,000.10 allocated/NGN 2,000.20 remaining without sending email. The customer link refreshed to the same balance. Desktop and 390px mobile views were inspected; mobile document widths showed no horizontal overflow. Local screenshots include `customer-invoice-desktop.png`, `customer-notifications-desktop.png`, `customer-notifications-mobile.png` and `financial-reports-mobile.png` under `../output/loamy-study/`. The initial download-event test timed out/reset the browser tool before an export request; after restoring the test session, the export action completed and showed its download confirmation. Backend tests independently opened the ZIP and verified original bytes/checksums and totals. No physical mobile device, native share destination or live mail recipient was tested.
+
+Remaining gates: real HTTPS/customer-link/recipient testing, actual SMTP arrival/uncertain-delivery operations, explicit approval of bearer-link privacy, ledger completeness/transfer classification, cash inputs, export/client limits, retention and owner release acceptance. No automatic reminder campaign, live bank access, external subscription cancellation, real customer message, upstream merge or production deployment was performed.
+
+## 15. Release acceptance record — fill only after verification
 
 - Implementation commit: **Published and verified: `3294da82ab452052969ff4a9ba32f7ea6225d469`**; inspect subsequent branch history for documentation/future updates.
 - Incoming upstream PR: **Not opened**.

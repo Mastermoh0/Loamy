@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { lazy, Suspense } from "react";
 const BusinessWorkspace = lazy(() => import('./BusinessWorkspace.jsx'));
+const CustomerInvoice = lazy(() => import('./CustomerInvoice.jsx'));
 const enterpriseEnabled = import.meta.env.DEV || import.meta.env.VITE_ENTERPRISE_ENABLED === 'true';
 const enterpriseOnly = import.meta.env.VITE_ENTERPRISE_ONLY === 'true';
 
@@ -28,9 +29,9 @@ export default function App() {
   const { pathname } = useLocation();
   // The backend enforces the 5-minute cooldown, so it's safe to keep this on
   // app-wide; the hook just debounces and pings.
-  useGlobalActivitySync({ enabled: !enterpriseOnly && pathname !== '/business', debounceMs: 2000 });
+  useGlobalActivitySync({ enabled: !enterpriseOnly && pathname !== '/business' && pathname !== '/customer-invoice', debounceMs: 2000 });
 
-  if (enterpriseOnly) return <div className="flex h-dvh flex-col overflow-hidden bg-canvas"><main id="app-main" className="min-h-0 flex-1 overflow-y-auto"><Suspense fallback={<p>Opening business workspace…</p>}><Routes><Route path="/business" element={<BusinessWorkspace />} /><Route path="*" element={<Navigate to="/business" replace />} /></Routes></Suspense></main></div>;
+  if (enterpriseOnly || (enterpriseEnabled && pathname === '/customer-invoice')) return <div className="flex h-dvh flex-col overflow-hidden bg-canvas"><main id="app-main" className="min-h-0 flex-1 overflow-y-auto"><Suspense fallback={<p>Opening business workspace…</p>}><Routes><Route path="/business" element={<BusinessWorkspace />} /><Route path="/customer-invoice" element={<CustomerInvoice />} /><Route path="*" element={<Navigate to="/business" replace />} /></Routes></Suspense></main></div>;
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-canvas">

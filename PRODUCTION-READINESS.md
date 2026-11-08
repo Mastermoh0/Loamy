@@ -4,6 +4,10 @@ Status: **production candidate for owner-controlled staging; not approved for li
 
 This work prepares the new business workflows without accessing Samuel's database, sending customer messages, changing DNS or deploying to a public host. It does not certify the original personal/Gmail backend or Android build as production-ready.
 
+### Customer messages, insights and exports (8 November 2026)
+
+Current candidate adds reviewed partial-payment/overdue email notices, expiring/revocable customer invoice links, owner cash-runway scenarios/current debtors/recurring-payment tracking and scoped ZIP financial-history/evidence exports. Apply forward migration `004_reports_notifications.sql` after 003; runtime requires 004 and the private schema has 36 tables. **76 backend tests passed, no skips**, including real offline OCR and TLS PostgreSQL, plus notification SMTP-outcome/send-lock, link privacy and exact report/evidence checks. The 36-table recovery and rebuilt restricted-container rehearsal passed. See section 14 of `SAMUEL-PRODUCTION-HANDOFF.md` for current behavior, limits and remaining staging gates. No real customer messages, automatic reminder scheduler, live bank balance or production deployment was enabled. Older evidence below is historical.
+
 ### Supplier/WhatsApp update (7 November 2026)
 
 Current release adds supplier invoice imports/liabilities with partial/split matching to existing expense debits, plus a private WhatsApp receipt inbox with sender linking, signed webhooks, durable media queue and supervised worker. Live WhatsApp remains disabled without complete operator configuration; provider tests are simulated and group capture is disabled/unverified. Apply forward migration `003_supplier_whatsapp.sql` after 002; runtime requires 003 and the private schema has 33 tables. **60 backend tests passed with no skips**, including real offline OCR and TLS PostgreSQL. The new 33-table recovery comparison and restricted production-container checks passed. See section 13 of `SAMUEL-PRODUCTION-HANDOFF.md` and the runbook for behavior, configuration, retention and real-provider acceptance gates. Earlier evidence below is historical.
@@ -71,7 +75,7 @@ docker compose --env-file .local-data/postgres-test.env -f compose.enterprise-te
 Build with `VITE_ENTERPRISE_ENABLED=true` and `VITE_ENTERPRISE_ONLY=true`, install/configure the offline receipt tools, then set `LOAMY_RUN_POSTGRES_TESTS=1` and `LOAMY_RUN_OCR_TESTS=1` for:
 
 ```text
-python -m unittest test_workspace_features test_workspace_orders test_workspace_invoices test_workspace_payments test_workspace_expenses test_workspace_owner test_workspace_receipts test_workspace_suppliers test_workspace_whatsapp test_enterprise_production -v
+python -m unittest test_workspace_features test_workspace_orders test_workspace_invoices test_workspace_payments test_workspace_expenses test_workspace_owner test_workspace_receipts test_workspace_suppliers test_workspace_whatsapp test_workspace_notifications test_workspace_reports test_enterprise_production -v
 python scripts/rehearse_enterprise_restore.py
 docker build -f Dockerfile.enterprise -t loamy-enterprise:rehearsal .
 python scripts/rehearse_enterprise_container.py

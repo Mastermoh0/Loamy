@@ -22,8 +22,9 @@ def generate():
         create_app(path)
         with closing(sqlite3.connect(path)) as connection:
             # Freeze migration 001; later additive tables belong in migration 002.
-            objects = connection.execute("SELECT sql FROM sqlite_master WHERE type IN ('table','index') AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND tbl_name NOT IN ('receipt_extractions','expense_extractions','supplier_bills','supplier_payments','whatsapp_challenges','whatsapp_senders','whatsapp_messages') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END,rowid").fetchall()
+            objects = connection.execute("SELECT sql FROM sqlite_master WHERE type IN ('table','index') AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND tbl_name NOT IN ('receipt_extractions','expense_extractions','supplier_bills','supplier_payments','whatsapp_challenges','whatsapp_senders','whatsapp_messages','customer_notices','invoice_shares','recurring_commitments') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END,rowid").fetchall()
             intake = connection.execute("SELECT sql FROM sqlite_master WHERE type IN ('table','index') AND sql IS NOT NULL AND tbl_name IN ('supplier_bills','supplier_payments','whatsapp_challenges','whatsapp_senders','whatsapp_messages') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END,rowid").fetchall()
+            reporting = connection.execute("SELECT sql FROM sqlite_master WHERE type IN ('table','index') AND sql IS NOT NULL AND tbl_name IN ('customer_notices','invoice_shares','recurring_commitments') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END,rowid").fetchall()
     statements = []
     for (sql,) in objects:
         sql = re.sub(r'\bINTEGER\b', 'BIGINT', sql, flags=re.I)
@@ -132,6 +133,25 @@ COMMIT;
 '''
     (target.parent / '003_supplier_whatsapp.sql').write_text(upgrade + '\n\n'.join(forward) + '\n' + grants, encoding='utf-8', newline='\n')
     print('Generated scripts/sql/enterprise/003_supplier_whatsapp.sql (no data)')
+    report_tables = []
+    for (sql,) in reporting:
+        for old, new in [('INTEGER', 'BIGINT'), ('REAL', 'DOUBLE PRECISION'), ('BLOB', 'BYTEA')]:
+            sql = re.sub(r'\b' + old + r'\b', new, sql, flags=re.I)
+        report_tables.append(sql + ';')
+    report_grants = '''
+ALTER TABLE customer_notices ADD FOREIGN KEY(location_id,business_id) REFERENCES locations(id,business_id);
+ALTER TABLE invoice_shares ADD FOREIGN KEY(location_id,business_id) REFERENCES locations(id,business_id);
+ALTER TABLE recurring_commitments ADD FOREIGN KEY(location_id,business_id) REFERENCES locations(id,business_id);
+REVOKE ALL ON customer_notices,invoice_shares,recurring_commitments FROM PUBLIC;
+GRANT SELECT,INSERT ON customer_notices,invoice_shares,recurring_commitments TO loamy_enterprise_app;
+GRANT UPDATE(status,updated_at) ON customer_notices TO loamy_enterprise_app;
+GRANT UPDATE(revoked_at) ON invoice_shares TO loamy_enterprise_app;
+GRANT UPDATE(status,cancelled_at,cancel_reason) ON recurring_commitments TO loamy_enterprise_app;
+INSERT INTO schema_migrations(version) VALUES ('004_reports_notifications');
+COMMIT;
+'''
+    (target.parent / '004_reports_notifications.sql').write_text('-- Additive release after 003; apply as migration owner.\nBEGIN;\nSET LOCAL search_path TO enterprise, pg_catalog;\n' + '\n\n'.join(report_tables) + '\n' + report_grants, encoding='utf-8', newline='\n')
+    print('Generated scripts/sql/enterprise/004_reports_notifications.sql (no data)')
 
 
 if __name__ == '__main__':

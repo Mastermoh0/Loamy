@@ -21,6 +21,8 @@ from workspace_expenses import install_expenses
 from workspace_owner import install_owner_dashboard
 from workspace_suppliers import install_suppliers
 from workspace_whatsapp import install_whatsapp, WEBHOOK
+from workspace_notifications import install_notifications
+from workspace_reports import install_reports
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
@@ -419,5 +421,7 @@ def create_app(database_path=None, *, production_settings=None):
     install_expenses(app, db, verified_user, membership, audit)
     install_suppliers(app, db, verified_user, membership, audit)
     install_whatsapp(app, db, verified_user, membership, audit, local_preview=not production)
+    install_notifications(app, db, verified_user, membership, audit, email.transport, production_settings.web_origin if production else 'http://127.0.0.1:5173')
+    install_reports(app, db, verified_user, membership, audit)
     install_owner_dashboard(app, db, verified_user, membership)
     return app

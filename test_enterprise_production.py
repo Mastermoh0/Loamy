@@ -63,6 +63,7 @@ class PostgresReleaseTests(unittest.TestCase):
             admin.execute((ROOT / 'scripts/sql/enterprise/002_receipt_extraction.sql').read_text())
             admin.execute("INSERT INTO enterprise.businesses VALUES ('upgrade-sentinel','Existing upgrade fixture',0)")
             admin.execute((ROOT / 'scripts/sql/enterprise/003_supplier_whatsapp.sql').read_text())
+            admin.execute((ROOT / 'scripts/sql/enterprise/004_reports_notifications.sql').read_text())
             self.assertEqual(admin.execute("SELECT name FROM enterprise.businesses WHERE id='upgrade-sentinel'").fetchone()[0], 'Existing upgrade fixture')
             admin.execute("DELETE FROM enterprise.businesses WHERE id='upgrade-sentinel'")
         self.env = patch.dict(os.environ, ProductionConfigTests().settings(LOAMY_WORKSPACE_WEB_ORIGIN='https://workspace.example.test',
@@ -149,6 +150,7 @@ class PostgresReleaseTests(unittest.TestCase):
         page = client.get('/business')
         self.assertEqual(page.status_code, 200, page.text)
         self.assertIn('id="root"', page.text)
+        self.assertEqual(client.get('/customer-invoice').status_code, 200)
         self.assertEqual(client.get('/enterprise-api/not-a-route').status_code, 404)
         self.assertEqual(client.get('/health/not-a-route').status_code, 404)
         oid, _ = self.fixture()
@@ -279,6 +281,62 @@ class PostgresReleaseTests(unittest.TestCase):
             with self.assertRaises(psycopg.errors.RaiseException):
                 conn.execute("UPDATE enterprise.whatsapp_messages SET receipt='tampered'::bytea")
             conn.execute("UPDATE enterprise.whatsapp_messages SET status='submitted'")
+
+
+    def test_postgres_customer_notice_send_guard_and_unknown_no_retry(self):
+        import time
+        _, iid = self.fixture(); today = datetime.now(timezone(timedelta(hours=1))).date().isoformat()
+        def credit(amount):
+            result = self.owner.post(self.base + '/payments/credits', json={'source_id': secrets.token_hex(16), 'amount': amount, 'occurred_on': today, 'payer': 'Fictional customer', 'narration': 'Rehearsal payment'})
+            self.assertEqual(result.status_code, 201, result.text); return result.json()['id']
+        def allocation(record, invoice, amount):
+            return self.owner.post(self.base + '/payments/allocations', json={'record_id': record, 'invoice_id': invoice, 'amount': amount, 'note': 'Rehearsal confirmed evidence', 'idempotency_key': secrets.token_hex(16)})
+        first = credit('20000.00'); self.assertEqual(allocation(first, iid, '20000.00').status_code, 201)
+        extra = credit('1000.00'); base = self.base + '/customer-notifications'
+        prepared = self.owner.post(base, json={'invoice_id': iid, 'kind': 'partial_payment', 'recipient': 'test-recipient@example.test', 'idempotency_key': secrets.token_hex(16)})
+        self.assertEqual(prepared.status_code, 201, prepared.text); nid = prepared.json()['id']
+        def guarded_sender(message):
+            self.assertIn('NGN 30000.00', message.get_content())
+            self.assertEqual(allocation(extra, iid, '1000.00').status_code, 409)
+        with patch('workspace_notifications.send_smtp', side_effect=guarded_sender):
+            sent = self.owner.post(base + f'/{nid}/send', json={})
+        self.assertEqual(sent.status_code, 200, sent.text); self.assertEqual(sent.json()['status'], 'accepted')
+        _, second_iid = self.new_invoice(); self.assertEqual(allocation(extra, second_iid, '1000.00').status_code, 201)
+        second = self.owner.post(base, json={'invoice_id': second_iid, 'kind': 'partial_payment', 'recipient': 'test-recipient@example.test', 'idempotency_key': secrets.token_hex(16)}).json()['id']
+        with patch('workspace_notifications.send_smtp', side_effect=OSError('Fictional uncertain transport')) as sender:
+            self.assertEqual(self.owner.post(base + f'/{second}/send', json={}).json()['status'], 'unknown')
+            self.assertEqual(self.owner.post(base + f'/{second}/send', json={'confirm_retry': True}).json()['status'], 'unknown')
+            self.assertEqual(sender.call_count, 1)
+
+    def test_postgres_insights_exports_and_customer_share_permissions(self):
+        from io import BytesIO
+        from zipfile import ZipFile
+        import json, hashlib, psycopg
+        _, iid = self.fixture(); today = datetime.now(timezone(timedelta(hours=1))).date()
+        ledger = f'/enterprise-api/businesses/{self.bid}/financial-records'
+        for days in [5, 35, 65]:
+            response = self.owner.post(ledger, json={'location_id': self.lid, 'direction': 'expense', 'amount': '100.10', 'occurred_on': (today - timedelta(days=days)).isoformat(), 'description': 'Recurring rehearsal hosting', 'category': 'Software', 'idempotency_key': secrets.token_hex(16)})
+            self.assertEqual(response.status_code, 201, response.text)
+        insights = self.owner.post(f'/enterprise-api/businesses/{self.bid}/financial-insights', json={'available_cash': '1000.00', 'confirm_complete_history': True})
+        self.assertEqual(insights.status_code, 200, insights.text)
+        self.assertEqual(insights.json()['runway_days'], 100000 * 90 // 30030)
+        self.assertEqual(len(insights.json()['recurring_candidates']), 1)
+        plan = self.owner.post(f'/enterprise-api/businesses/{self.bid}/recurring-commitments', json={'location_id': self.lid, 'vendor': 'Rehearsal hosting', 'description': 'Tracked monthly service', 'amount': '100.10', 'cadence': 'monthly', 'next_due': today.isoformat(), 'idempotency_key': secrets.token_hex(16)})
+        self.assertEqual(plan.status_code, 201, plan.text)
+        report = self.owner.post(f'/enterprise-api/businesses/{self.bid}/financial-history/export', json={'start': (today - timedelta(days=90)).isoformat(), 'end': today.isoformat()})
+        self.assertEqual(report.status_code, 200, report.text if report.status_code != 200 else '')
+        with ZipFile(BytesIO(report.content)) as archive:
+            manifest = json.loads(archive.read('manifest.json')); self.assertEqual(manifest['posted_totals']['expenses'], '300.30')
+            entry = manifest['evidence'][0]; self.assertEqual(hashlib.sha256(archive.read(entry['path'])).hexdigest(), entry['sha256'])
+        shares = self.base + f'/invoices/{iid}/shares'; link = self.owner.post(shares, json={})
+        self.assertEqual(link.status_code, 201, link.text); token = link.json()['url'].split('#token=')[1]
+        public = self.client().post('/enterprise-api/customer-invoice', json={'token': token})
+        self.assertEqual(public.status_code, 200, public.text); self.assertNotIn('allocations', public.json()['payments'])
+        self.assertEqual(self.owner.post(shares + f'/{link.json()["id"]}/revoke').status_code, 200)
+        self.assertEqual(self.client().post('/enterprise-api/customer-invoice', json={'token': token}).status_code, 404)
+        with psycopg.connect(self.app_dsn, autocommit=True) as conn:
+            with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+                conn.execute('UPDATE enterprise.recurring_commitments SET amount_minor=1')
 
 
 if __name__ == '__main__':

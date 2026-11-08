@@ -219,6 +219,8 @@ def install_orders(app, db, verified_user, membership, audit, transport, local_p
             if not order:
                 raise HTTPException(404, 'Order not found')
             if order['status'] == 'open':
+                if conn.execute("SELECT n.id FROM customer_notices n JOIN invoices i ON i.id=n.invoice_id WHERE i.order_id=? AND n.status='sending' AND n.updated_at>?", (order_id, time.time() - 120)).fetchone():
+                    raise HTTPException(409, 'A customer balance notice is being sent. Wait for its result before cancelling.')
                 if conn.execute('SELECT a.id FROM payment_allocations a JOIN invoices i ON i.id=a.invoice_id WHERE i.order_id=? AND a.reversed_at IS NULL', (order_id,)).fetchone():
                     raise HTTPException(409, 'Reverse invoice payment allocations before cancelling. Reversal does not refund money.')
                 if conn.execute("SELECT d.id FROM invoice_deliveries d JOIN invoices i ON i.id=d.invoice_id WHERE i.order_id=? AND d.status='sending' AND d.created_at>?", (order_id, time.time() - 120)).fetchone():

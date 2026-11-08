@@ -1,5 +1,15 @@
 # Local business workspace
 
+## Customer messages, invoice links and financial reports (8 November 2026)
+
+Open **Customer messages** for current partial-payment/overdue invoice candidates. Prepare a draft, review its text/recipient and explicitly confirm local delivery. The preview captures the message; it sends no email. Changed balances require a fresh draft, and uncertain attempts are never automatically repeated. Production SMTP acceptance still needs real staging verification.
+
+Open an issued invoice under **Services & orders** to create an expiring customer link. Preview it, copy it or hand it to the device share menu; no external message is sent automatically. Anyone holding the link can view that invoice and its current balance until expiry/revocation, so use fictional customers locally and share privately in production. The customer page exposes no workspace access. Manage/revoke links from the invoice panel.
+
+Open **Insights & reports** to download a ZIP report for the selected dates/location with summary/ledger CSVs, current invoice balances, evidence references and optional original invoice/linked receipt files. Start with dates covering your fictional fixtures. A report keeps current balances separate from historical cash movements and excludes unposted receipts/private inbox messages. Read README/manifest coverage and keep spreadsheet escaping intact.
+
+Owners also see completed-day cash burn, current debtors, recurring candidates and tracked subscriptions. Enter a verified cash amount and explicitly confirm observation coverage to model runway when recorded net burn is positive. The cash input and tracked subscriptions create no financial entries; cancelling tracking does not cancel a supplier's real service. These are deterministic recorded insights, not a live bank feed or generative financial advice.
+
 ## Supplier bills and WhatsApp receipts (7 November 2026)
 
 Open **Supplier bills**, choose a location and import a fictional invoice (JPEG/PNG/PDF, 2 MB max). Extract optional suggestions, confirm supplier/reference/description/category/total/issue/due dates, then Save unpaid bill. This changes bills owed only. Record or confirm the matching expense debit in **Financial records**, then link all/part of that debit to the bill; no second expense is created. Payment corrections retain reversal history. Owner overview shows current supplier payables separately from cash flow and customer balances.

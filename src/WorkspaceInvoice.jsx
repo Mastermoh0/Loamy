@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { workspaceRequest as api } from './services/workspaceService';
+import WorkspaceInvoiceShare from './WorkspaceInvoiceShare';
 
 const amount = (value) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(value);
 const DELIVERY = {
@@ -91,6 +92,7 @@ export default function WorkspaceInvoice({ base, order, canIssue, parentBusy }) 
           {delivery.transport === 'capture' && <details><summary>View captured email</summary><p>{delivery.subject}</p><p className="workspace-order-prewrap">{delivery.body}</p><a className="workspace-text-button" href={`/enterprise-api${endpoint}/email/${delivery.id}/attachment`} download>Download captured PDF attachment</a>{invoice.status === 'cancelled' && <p>This historical attachment was issued before cancellation. Use the marked-cancelled invoice above for the current status.</p>}</details>}
         </div></li>)}</ul>
       </section>
+      {canIssue && <WorkspaceInvoiceShare base={base} invoice={invoice} disabled={disabled} />}
     </>}
   </section>;
 }

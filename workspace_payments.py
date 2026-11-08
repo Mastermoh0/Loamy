@@ -46,15 +46,25 @@ class InvoiceAccountInput(Input):
     account_id: str
 
 
+def payment_totals(total, paid, invoice_status):
+    total, paid = int(total), int(paid)
+    status = 'cancelled' if invoice_status == 'cancelled' else 'overpaid' if paid > total else 'paid' if paid == total else 'part_paid' if paid else 'unpaid'
+    return {'status': status, 'total': money(total), 'allocated': money(paid), 'outstanding': money(max(total - paid, 0)), 'overpayment': money(max(paid - total, 0))}
+
+
 def payment_summary(conn, invoice):
     total = conn.execute('SELECT total_minor FROM orders WHERE id=?', (invoice['order_id'],)).fetchone()[0]
     paid = conn.execute("SELECT coalesce(sum(a.amount_minor),0) FROM payment_allocations a JOIN financial_records r ON r.id=a.record_id WHERE a.invoice_id=? AND a.reversed_at IS NULL AND r.status='posted'", (invoice['id'],)).fetchone()[0]
-    status = 'cancelled' if invoice['status'] == 'cancelled' else 'overpaid' if paid > total else 'paid' if paid == total else 'part_paid' if paid else 'unpaid'
     rows = conn.execute('SELECT a.id,a.amount_minor,a.created_at,a.reversed_at,a.reversal_reason,a.note,u.name actor FROM payment_allocations a JOIN users u ON u.id=a.actor_id WHERE a.invoice_id=? ORDER BY a.created_at DESC', (invoice['id'],)).fetchall()
     history = [{**dict(row), 'amount': money(row['amount_minor'])} for row in rows]
     for row in history:
         row.pop('amount_minor')
-    return {'status': status, 'total': money(total), 'allocated': money(paid), 'outstanding': money(max(total - paid, 0)), 'overpayment': money(max(paid - total, 0)), 'allocations': history}
+    return {**payment_totals(total, paid, invoice['status']), 'allocations': history}
+
+
+def guard_balance_notice(conn, invoice_id):
+    if conn.execute("SELECT id FROM customer_notices WHERE invoice_id=? AND status='sending' AND updated_at>?", (invoice_id, time.time() - 120)).fetchone():
+        raise HTTPException(409, 'A customer balance message is being sent. Wait for its result before changing allocations.')
 
 
 def install_payments(app, db, verified_user, membership, audit):
@@ -196,6 +206,7 @@ def install_payments(app, db, verified_user, membership, audit):
             invoice = invoice_row(conn, business_id, location_id, data.invoice_id)
             if invoice['status'] != 'issued':
                 raise HTTPException(409, 'Cancelled invoices cannot receive allocations')
+            guard_balance_notice(conn, invoice['id'])
             record = conn.execute("SELECT r.*,e.account_id FROM financial_records r LEFT JOIN payment_evidence e ON e.record_id=r.id WHERE r.id=? AND r.business_id=? AND r.location_id=? AND r.direction='income' AND r.currency='NGN' AND r.status='posted'", (data.record_id, business_id, location_id)).fetchone()
             if not record:
                 raise HTTPException(404, 'Posted income record not found')
@@ -220,6 +231,7 @@ def install_payments(app, db, verified_user, membership, audit):
             if not row:
                 raise HTTPException(404, 'Allocation not found')
             if row['reversed_at'] is None:
+                guard_balance_notice(conn, row['invoice_id'])
                 conn.execute('UPDATE payment_allocations SET reversed_at=?,reversed_by=?,reversal_reason=? WHERE id=?', (time.time(), actor['id'], data.reason, allocation_id))
                 audit(conn, business_id, actor['id'], f'Reversed allocation {allocation_id}: {data.reason}')
         return {'success': True}
