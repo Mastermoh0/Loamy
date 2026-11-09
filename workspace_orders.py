@@ -5,11 +5,13 @@ import hashlib
 import json
 import secrets
 import time
+from typing import Literal
 
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from workspace_finances import money, VoidInput
 from workspace_invoices import install_invoices
+from workspace_pricing import PricingInput, install_pricing, location_pricing, order_pricing, calculate
 
 
 class Input(BaseModel):
@@ -40,6 +42,10 @@ class OrderInput(Input):
     customer_contact: str = Field(min_length=3, max_length=254)
     lines: list[OrderLine] = Field(min_length=1, max_length=20)
     idempotency_key: str = Field(min_length=16, max_length=80, pattern=r'^[a-zA-Z0-9_-]+$')
+    expected_tax_rate: Decimal | None = Field(default=None, ge=0, le=100, max_digits=5, decimal_places=2)
+    discount_type: Literal['none', 'fixed', 'percent'] = 'none'
+    discount_value: Decimal = Field(default=Decimal('0'), ge=0, max_digits=10, decimal_places=2)
+    discount_reason: str = Field(default='', max_length=240)
 
     @field_validator('lines')
     @classmethod
@@ -94,6 +100,8 @@ def install_orders(app, db, verified_user, membership, audit, transport, local_p
             raise HTTPException(404, 'Location not found')
         return location
 
+    install_pricing(db)
+
     def profile(conn, bid, location):
         saved = conn.execute('SELECT invoice_name,address,payment_instructions FROM location_profiles WHERE location_id=?', (location['id'],)).fetchone()
         return dict(saved) if saved else {'invoice_name': conn.execute('SELECT name FROM businesses WHERE id=?', (bid,)).fetchone()[0],
@@ -112,7 +120,16 @@ def install_orders(app, db, verified_user, membership, audit, transport, local_p
                 service['price'] = money(service.pop('price_minor'))
                 service['active'] = bool(service['active'])
                 result.append(service)
-            return {'services': result, 'profile': profile(conn, business_id, location), 'currency': 'NGN'}
+            return {'services': result, 'profile': profile(conn, business_id, location), 'pricing': location_pricing(conn, location_id), 'currency': 'NGN'}
+
+    @app.put(base + '/pricing')
+    def save_pricing(business_id: str, location_id: str, data: PricingInput, actor=Depends(verified_user)):
+        with db() as conn:
+            scope(conn, business_id, location_id, actor, catalogue=True)
+            conn.execute('INSERT INTO location_pricing VALUES (?,?,?) ON CONFLICT(location_id) DO UPDATE SET tax_label=excluded.tax_label,tax_rate_bps=excluded.tax_rate_bps',
+                         (location_id, data.tax_label, int(data.tax_rate * 100)))
+            audit(conn, business_id, actor['id'], f'Updated exclusive tax for location {location_id}: {data.tax_label} {data.tax_rate}%')
+        return {'success': True}
 
     @app.put(base + '/profile')
     def save_profile(business_id: str, location_id: str, data: ProfileInput, actor=Depends(verified_user)):
@@ -145,7 +162,11 @@ def install_orders(app, db, verified_user, membership, audit, transport, local_p
 
     @app.post(base + '/orders', status_code=201)
     def create_order(business_id: str, location_id: str, data: OrderInput, actor=Depends(verified_user)):
-        request_hash = hashlib.sha256(json.dumps(data.model_dump(mode='json', exclude={'idempotency_key'}), sort_keys=True).encode()).hexdigest()
+        request_data = data.model_dump(mode='json', exclude={'idempotency_key'})
+        # Preserve retry hashes for orders created before pricing fields existed.
+        for field in {'expected_tax_rate', 'discount_type', 'discount_value', 'discount_reason'} - data.model_fields_set:
+            request_data.pop(field)
+        request_hash = hashlib.sha256(json.dumps(request_data, sort_keys=True).encode()).hexdigest()
         with db() as conn:
             conn.execute('BEGIN IMMEDIATE')
             location = scope(conn, business_id, location_id, actor, write=True)
@@ -163,6 +184,17 @@ def install_orders(app, db, verified_user, membership, audit, transport, local_p
                     raise HTTPException(409, 'A service price changed. Refresh the catalogue and review this order before saving.')
                 lines.append((item.service_id, service['name'], service['description'], item.quantity, service['price_minor']))
                 total += item.quantity * service['price_minor']
+            pricing = location_pricing(conn, location_id)
+            rate_bps = int(Decimal(pricing['tax_rate']) * 100)
+            if data.expected_tax_rate is None and rate_bps or data.expected_tax_rate is not None and int(data.expected_tax_rate * 100) != rate_bps:
+                raise HTTPException(409, 'Tax settings changed. Refresh the catalogue and review this order before saving.')
+            member = membership(conn, business_id, actor)
+            if data.discount_type != 'none' and member['role'] not in {'owner', 'manager'}:
+                raise HTTPException(403, 'Only an owner or manager can apply a discount')
+            if data.discount_type != 'none' and (data.discount_value <= 0 or len(data.discount_reason) < 3):
+                raise HTTPException(422, 'Enter a positive discount and a reason of at least three characters')
+            subtotal = total
+            discount, tax, total = calculate(subtotal, data.discount_type, data.discount_value, rate_bps)
             oid = secrets.token_hex(16)
             today = datetime.now(timezone(timedelta(hours=1))).date().isoformat()
             # The complete random ID keeps the human-readable reference unique without a shared counter.
@@ -172,6 +204,8 @@ def install_orders(app, db, verified_user, membership, audit, transport, local_p
                           json.dumps(profile(conn, business_id, location)), request_hash, data.idempotency_key))
             for position, line in enumerate(lines):
                 conn.execute('INSERT INTO order_lines VALUES (?,?,?,?,?,?,?)', (oid, position, *line))
+            conn.execute('INSERT INTO order_pricing VALUES (?,?,?,?,?,?,?,?,?)',
+                         (oid, subtotal, data.discount_type, int(data.discount_value * 100), discount, data.discount_reason, pricing['tax_label'], rate_bps, tax))
             audit(conn, business_id, actor['id'], f'Created order {reference} at location {location_id}')
         return {'id': oid, 'reference': reference, 'duplicate': False}
 
@@ -202,6 +236,7 @@ def install_orders(app, db, verified_user, membership, audit, transport, local_p
                 raise HTTPException(404, 'Order not found')
             order = dict(row)
             order['total'] = money(order.pop('total_minor'))
+            order['pricing'] = order_pricing(conn, order_id, row['total_minor'])
             order['profile'] = json.loads(order.pop('profile_snapshot'))
             order.pop('request_hash')
             order.pop('idempotency_key')

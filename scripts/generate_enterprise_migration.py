@@ -22,7 +22,7 @@ def generate():
         create_app(path)
         with closing(sqlite3.connect(path)) as connection:
             # Freeze migration 001; later additive tables belong in migration 002.
-            objects = connection.execute("SELECT sql FROM sqlite_master WHERE type IN ('table','index') AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND tbl_name NOT IN ('receipt_extractions','expense_extractions','supplier_bills','supplier_payments','whatsapp_challenges','whatsapp_senders','whatsapp_messages','customer_notices','invoice_shares','recurring_commitments') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END,rowid").fetchall()
+            objects = connection.execute("SELECT sql FROM sqlite_master WHERE type IN ('table','index') AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND tbl_name NOT IN ('receipt_extractions','expense_extractions','supplier_bills','supplier_payments','whatsapp_challenges','whatsapp_senders','whatsapp_messages','customer_notices','invoice_shares','recurring_commitments','location_pricing','order_pricing') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END,rowid").fetchall()
             intake = connection.execute("SELECT sql FROM sqlite_master WHERE type IN ('table','index') AND sql IS NOT NULL AND tbl_name IN ('supplier_bills','supplier_payments','whatsapp_challenges','whatsapp_senders','whatsapp_messages') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END,rowid").fetchall()
             reporting = connection.execute("SELECT sql FROM sqlite_master WHERE type IN ('table','index') AND sql IS NOT NULL AND tbl_name IN ('customer_notices','invoice_shares','recurring_commitments') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END,rowid").fetchall()
     statements = []

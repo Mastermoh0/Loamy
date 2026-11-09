@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { workspaceRequest as api } from './services/workspaceService';
 import WorkspaceInvoice from './WorkspaceInvoice';
+import WorkspacePricing, { PricingBreakdown } from './WorkspacePricing';
 
 const currency = (amount) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
 const minor = (amount) => Math.round(Number(amount) * 100);
+const rateAmount = (amount, basisPoints) => Number.isSafeInteger(amount) && Number.isSafeInteger(basisPoints) ? Number((BigInt(amount) * BigInt(basisPoints) + 5000n) / 10000n) : 0;
 
 function ServiceForm({ service, busy, onSave, onClose }) {
   return <form className="workspace-order-form" onSubmit={(event) => {
@@ -20,15 +22,21 @@ function ServiceForm({ service, busy, onSave, onClose }) {
   </fieldset></form>;
 }
 
-function NewOrder({ services, busy, onSave, onClose }) {
+function NewOrder({ services, pricing, canDiscount, busy, onSave, onClose }) {
   const [lines, setLines] = useState([{ service_id: '', quantity: '1' }]);
+  const [discountType, setDiscountType] = useState('none');
+  const [discountValue, setDiscountValue] = useState('');
   const available = services.filter((service) => service.active);
-  const total = lines.reduce((sum, line) => sum + minor(available.find((s) => s.id === line.service_id)?.price || 0) * Number(line.quantity || 0), 0);
+  const subtotal = lines.reduce((sum, line) => sum + minor(available.find((s) => s.id === line.service_id)?.price || 0) * Number(line.quantity || 0), 0);
+  const discount = discountType === 'percent' ? rateAmount(subtotal, minor(discountValue || 0)) : discountType === 'fixed' ? minor(discountValue || 0) : 0;
+  const tax = rateAmount(Math.max(0, subtotal - discount), minor(pricing.tax_rate));
+  const total = subtotal - discount + tax;
   function update(index, key, value) { setLines((current) => current.map((line, i) => i === index ? { ...line, [key]: value } : line)); }
   return <form className="workspace-order-form" onSubmit={(event) => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
-    onSave({ customer_name: values.customer_name, customer_contact: values.customer_contact,
+    onSave({ customer_name: values.customer_name, customer_contact: values.customer_contact, expected_tax_rate: pricing.tax_rate,
+      discount_type: discountType, discount_value: discountType === 'none' ? '0' : discountValue, discount_reason: values.discount_reason || '',
       lines: lines.map((line) => ({ service_id: line.service_id, quantity: Number(line.quantity), expected_price: available.find((s) => s.id === line.service_id)?.price })) });
   }}><fieldset disabled={busy}>
     <h3>New order</h3>
@@ -44,14 +52,17 @@ function NewOrder({ services, busy, onSave, onClose }) {
       {lines.length > 1 && <button type="button" className="workspace-text-button" aria-label={`Remove line ${index + 1}`} onClick={() => setLines((current) => current.filter((_, i) => i !== index))}>Remove</button>}
     </div>)}
     {lines.length < Math.min(20, available.length) && <button type="button" className="workspace-text-button" onClick={() => setLines((current) => [...current, { service_id: '', quantity: '1' }])}>Add another item</button>}
-    <p className="workspace-order-total">Order total <strong>{currency(total / 100)}</strong></p>
+    {canDiscount && <><label className="workspace-field"><span>Order discount</span><select value={discountType} onChange={(event) => { setDiscountType(event.target.value); setDiscountValue(''); }}><option value="none">No discount</option><option value="fixed">Fixed amount (NGN)</option><option value="percent">Percentage (%)</option></select></label>{discountType !== 'none' && <div className="workspace-order-columns"><label className="workspace-field"><span>{discountType === 'fixed' ? 'Discount amount (NGN)' : 'Discount percentage (%)'}</span><input type="number" required min="0.01" max={discountType === 'percent' ? '100' : '99999999.99'} step="0.01" value={discountValue} onChange={(event) => setDiscountValue(event.target.value)} /></label><label className="workspace-field"><span>Discount reason (shown on invoice)</span><input name="discount_reason" required minLength={3} maxLength={240} /></label></div>}</>}
+    <PricingBreakdown pricing={{ subtotal: subtotal / 100, discount: discount / 100, tax: tax / 100, tax_label: pricing.tax_label, tax_rate: pricing.tax_rate }} />
+    {discount >= subtotal && subtotal > 0 && <p role="alert" className="workspace-error">Reduce the discount to leave a positive order amount.</p>}
+    <p className="workspace-order-total">Order total <strong>{currency(Math.max(0, total) / 100)}</strong></p>
     <small>Prices are checked when saving. An open order is not a payment or an invoice.</small>
-    <div className="workspace-order-actions"><button type="submit" className="workspace-primary">{busy ? 'Saving…' : 'Save order'}</button><button type="button" className="workspace-text-button" onClick={onClose}>Discard draft</button></div>
+    <div className="workspace-order-actions"><button type="submit" disabled={discount >= subtotal} className="workspace-primary">{busy ? 'Saving…' : 'Save order'}</button><button type="button" className="workspace-text-button" onClick={onClose}>Discard draft</button></div>
   </fieldset></form>;
 }
 
-export default function WorkspaceOrders({ businessId, role, locations }) {
-  const [locationId, setLocationId] = useState(locations[0]?.id || '');
+export default function WorkspaceOrders({ businessId, role, locations, initialLocation = '' }) {
+  const [locationId, setLocationId] = useState(initialLocation || locations[0]?.id || '');
   const [view, setView] = useState('orders');
   const [period, setPeriod] = useState('today');
   const [data, setData] = useState(null);
@@ -81,8 +92,8 @@ export default function WorkspaceOrders({ businessId, role, locations }) {
 
   async function action(work, message) {
     setBusy(true); setError(''); setNotice('');
-    try { await work(); setNotice(message); setLoading(true); setVersion((value) => value + 1); }
-    catch (failure) { setError(failure.message); }
+    try { await work(); setNotice(message); setLoading(true); setVersion((value) => value + 1); return true; }
+    catch (failure) { setError(failure.message); return false; }
     finally { setBusy(false); }
   }
 
@@ -110,6 +121,7 @@ export default function WorkspaceOrders({ businessId, role, locations }) {
     {loading && <p role="status">Loading services and orders…</p>}
     {data && orders && <>
       {view === 'catalogue' ? <>
+        {canEdit && <WorkspacePricing pricing={data.pricing} busy={busy} onSave={(values) => action(() => api(`${base}/pricing`, 'PUT', values), 'Tax settings saved for new orders.')} />}
         <div className="workspace-section-heading"><div><h3>Location catalogue</h3><p>Prices in NGN. Unavailable services remain on past orders.</p></div>{canEdit && <button className="workspace-secondary" disabled={busy || !!editing} onClick={() => setEditing({ active: true })}>Add service</button>}</div>
         {editing && <ServiceForm key={editing.id || 'new'} service={editing} busy={busy} onClose={() => setEditing(null)} onSave={(values) => action(async () => {
           await api(`${base}/services${editing.id ? `/${editing.id}` : ''}`, editing.id ? 'PUT' : 'POST', values); setEditing(null);
@@ -127,7 +139,7 @@ export default function WorkspaceOrders({ businessId, role, locations }) {
       </> : <>
         <div className="workspace-section-heading"><div><h3>Location orders</h3><p>Today uses the Lagos calendar date ({orders.today}). Counts include every order in this view.</p></div>{canOrder && <button className="workspace-primary" disabled={busy || newOrder || !data.services.some((s) => s.active)} onClick={() => { setNewOrder(true); setDetail(null); setNotice(''); }}>New order</button>}</div>
         {!data.services.some((service) => service.active) && <p>No active services. Open the service catalogue {canEdit ? 'to add or activate a service.' : 'and ask your manager to add one.'}</p>}
-        {newOrder && <NewOrder services={data.services} busy={busy} onSave={saveOrder} onClose={() => { setNewOrder(false); retry.current = null; }} />}
+        {newOrder && <NewOrder services={data.services} pricing={data.pricing} canDiscount={canEdit} busy={busy} onSave={saveOrder} onClose={() => { setNewOrder(false); retry.current = null; }} />}
         <label className="workspace-field workspace-order-location"><span>Order period</span><select value={period} disabled={busy || newOrder || loading} onChange={(event) => { setPeriod(event.target.value); setLoading(true); setDetail(null); }}><option value="today">Today</option><option value="all">All dates</option></select></label>
         <p className="workspace-order-counts">{orders.counts.total} total · {orders.counts.open} open · {orders.counts.cancelled} cancelled</p>
         <p>Showing {orders.orders.length} of {orders.counts.total} orders, latest first. Open means saved, not paid.</p>
@@ -136,6 +148,7 @@ export default function WorkspaceOrders({ businessId, role, locations }) {
         {detail && <section className="workspace-order-detail" aria-labelledby="order-detail-title"><div className="workspace-section-heading"><h3 id="order-detail-title">Order details</h3><button className="workspace-text-button" disabled={busy} onClick={() => setDetail(null)}>Close order</button></div>
           <p className="workspace-order-reference">{detail.reference}</p><p><strong>{detail.customer_name}</strong><br />{detail.customer_contact}</p><p>{detail.status === 'open' ? 'Open' : 'Cancelled'} · Created by {detail.created_by} · {detail.order_date}</p>
           <ul className="workspace-order-list">{detail.lines.map((line, index) => <li key={index}><div><h4>{line.name}</h4><p>{line.description}</p><small>{line.quantity} × {currency(line.unit_price)}</small></div><strong>{currency(line.total)}</strong></li>)}</ul>
+          <PricingBreakdown pricing={detail.pricing} />
           <p className="workspace-order-total">Total <strong>{currency(detail.total)}</strong></p>
           <p><strong>{detail.profile.invoice_name}</strong><br />{detail.profile.address}</p><p className="workspace-order-prewrap">{detail.profile.payment_instructions}</p>
           <WorkspaceInvoice key={`${detail.id}-${detail.status}`} base={base} order={detail} canIssue={canOrder} parentBusy={busy} />

@@ -214,3 +214,10 @@
 .workspace-receipt-extraction { padding: 16px; background: #f3f6f2; border: 1px solid #d8e0d9; border-radius: 8px; }
 .workspace-receipt-extraction pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow-y: auto; font-size: 13px; }
 @media (max-width: 600px) { .workspace-owner-metrics, .workspace-owner-locations, .workspace-owner-accounts { grid-template-columns: 1fr; } }
+
+.workspace-pricing-breakdown { max-width: 480px; margin: 20px 0; font-variant-numeric: tabular-nums; }
+.workspace-pricing-breakdown p { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; overflow-wrap: anywhere; }
+.workspace-location-arrival { padding: 20px 0; border-bottom: 1px solid #d8e0d9; margin-bottom: 24px; }
+.workspace-locations li > .workspace-location-link { flex: 1 1 100%; min-width: 0; }
+.workspace-location-qr { display: block; max-width: 100%; height: auto; background: white; margin: 16px 0; }
+.workspace-location-link p { max-width: 65ch; }

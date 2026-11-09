@@ -64,6 +64,7 @@ class PostgresReleaseTests(unittest.TestCase):
             admin.execute("INSERT INTO enterprise.businesses VALUES ('upgrade-sentinel','Existing upgrade fixture',0)")
             admin.execute((ROOT / 'scripts/sql/enterprise/003_supplier_whatsapp.sql').read_text())
             admin.execute((ROOT / 'scripts/sql/enterprise/004_reports_notifications.sql').read_text())
+            admin.execute((ROOT / 'scripts/sql/enterprise/005_pricing.sql').read_text())
             self.assertEqual(admin.execute("SELECT name FROM enterprise.businesses WHERE id='upgrade-sentinel'").fetchone()[0], 'Existing upgrade fixture')
             admin.execute("DELETE FROM enterprise.businesses WHERE id='upgrade-sentinel'")
         self.env = patch.dict(os.environ, ProductionConfigTests().settings(LOAMY_WORKSPACE_WEB_ORIGIN='https://workspace.example.test',
@@ -111,6 +112,28 @@ class PostgresReleaseTests(unittest.TestCase):
         invoice = self.owner.post(self.base + f'/orders/{oid}/invoice', json={})
         self.assertEqual(invoice.status_code, 201, invoice.text)
         return oid, invoice.json()['invoice']['id']
+
+    def test_pricing_upgrade_exact_totals_private_history_and_location_qr(self):
+        import psycopg
+        oid, _ = self.fixture()
+        self.assertEqual(self.owner.get(self.base + f'/orders/{oid}').json()['total'], '50000.00')
+        self.assertEqual(self.owner.put(self.base + '/pricing', json={'tax_label': 'Test VAT', 'tax_rate': '7.50'}).status_code, 200)
+        response = self.owner.post(self.base + '/orders', json={'customer_name': 'Tax Guest', 'customer_contact': 'guest@example.test',
+            'lines': [{'service_id': self.sid, 'quantity': 1, 'expected_price': '50000.00'}], 'idempotency_key': secrets.token_hex(16),
+            'expected_tax_rate': '7.50', 'discount_type': 'percent', 'discount_value': '10', 'discount_reason': 'Approved test offer'})
+        self.assertEqual(response.status_code, 201, response.text)
+        adjusted = response.json()['id']
+        detail = self.owner.get(self.base + f'/orders/{adjusted}').json()
+        self.assertEqual((detail['pricing']['discount'], detail['pricing']['tax'], detail['total']), ('5000.00', '3375.00', '48375.00'))
+        invoice = self.owner.post(self.base + f'/orders/{adjusted}/invoice', json={}).json()['invoice']
+        self.assertEqual(invoice['payments']['outstanding'], '48375.00')
+        link = self.owner.get(self.base + '/link')
+        self.assertEqual(link.status_code, 200, link.text)
+        self.assertEqual(link.json()['url'], f'https://workspace.example.test/business?business={self.bid}&location={self.lid}')
+        with psycopg.connect(self.app_dsn, autocommit=True) as conn:
+            for query in ['UPDATE enterprise.order_pricing SET tax_minor=1', 'DELETE FROM enterprise.order_pricing', 'DELETE FROM enterprise.location_pricing']:
+                with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+                    conn.execute(query)
 
     def test_auth_headers_scope_and_private_schema(self):
         import psycopg

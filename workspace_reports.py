@@ -183,7 +183,7 @@ def install_reports(app, db, verified_user, membership, audit):
                     if r['status'] == 'cancelled':
                         payments['outstanding'] = '0.00'
                     snapshot = json.loads(r['snapshot'])
-                    invoices.append({'id': r['id'], 'number': r['number'], 'customer': snapshot['customer_name'], 'contact': snapshot['customer_contact'], 'due_on': r['due_on'], **{k: payments[k] for k in ['status', 'total', 'allocated', 'outstanding', 'overpayment']}})
+                    invoices.append({'id': r['id'], 'number': r['number'], 'customer': snapshot['customer_name'], 'contact': snapshot['customer_contact'], 'due_on': r['due_on'], **(snapshot.get('pricing') or {'subtotal': payments['total'], 'discount': '0.00', 'tax': '0.00', 'tax_label': 'Tax', 'tax_rate': '0.00', 'discount_type': 'none', 'discount_value': '0.00', 'discount_reason': ''}), **{k: payments[k] for k in ['status', 'total', 'allocated', 'outstanding', 'overpayment']}})
                     issued = datetime.fromtimestamp(r['issued_at'], timezone(timedelta(hours=1))).date()
                     if data.include_evidence and (data.start <= issued <= data.end or r['id'] in related_invoices):
                         files.append(('invoices/' + r['id'] + '.pdf', 'invoices', 'pdf', 'id', r['id'], r['bytes'], None))
@@ -205,7 +205,7 @@ def install_reports(app, db, verified_user, membership, audit):
                 if any('..' in f[0].split('/') or '\\' in f[0] for f in files):
                     raise HTTPException(409, 'An evidence identifier cannot be exported safely; ask the operator to review it')
                 tables = {'ledger.csv': (['id', 'location_id', 'location', 'direction', 'amount', 'currency', 'occurred_on', 'description', 'category', 'source', 'status', 'void_reason', 'actor_id'], records),
-                          'current-invoice-balances.csv': (['id', 'number', 'customer', 'contact', 'due_on', 'status', 'total', 'allocated', 'outstanding', 'overpayment'], invoices),
+                          'current-invoice-balances.csv': (['id', 'number', 'customer', 'contact', 'due_on', 'subtotal', 'discount_type', 'discount_value', 'discount_reason', 'discount', 'tax_label', 'tax_rate', 'tax', 'status', 'total', 'allocated', 'outstanding', 'overpayment'], invoices),
                           'payment-allocations.csv': (['id', 'record_id', 'invoice_id', 'amount', 'created_at', 'reversed_at', 'reversal_reason', 'note'], allocations),
                           'supplier-payment-allocations.csv': (['id', 'bill_id', 'record_id', 'amount', 'reason', 'reversed_at', 'reverse_reason'], supplier_allocations),
                           'expense-evidence.csv': (['id', 'record_id', 'submitter_id', 'revision', 'vendor', 'purpose', 'category', 'amount', 'occurred_on', 'receipt_hash'], expenses),

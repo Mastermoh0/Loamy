@@ -1,5 +1,11 @@
 # Local business workspace
 
+## Taxes, discounts and location QR (9 November 2026)
+
+In **Services & orders → Service catalogue**, owners/managers edit the location's exclusive tax name/rate (zero by default). A new order supports one fixed or percentage discount and a customer-visible reason. Only owners/managers can discount; front desk uses the configured tax. Review subtotal, discount, tax and final amount before saving. Discount precedes tax with half-up kobo rounding; the discounted subtotal must remain positive. Saved orders/invoices keep their breakdown and payment balances/exports use the adjusted total. Use fictional rates locally; Samuel must approve actual rules.
+
+In **Locations → Show location QR**, display/download a code or select/copy its link. Opening it selects an authorized location after sign-in. It grants no membership and is not a public customer catalogue. Loopback works only on this computer; phone testing needs the real HTTPS host. See handoff section 16 and migration 005 for staging setup.
+
 ## Customer messages, invoice links and financial reports (8 November 2026)
 
 Open **Customer messages** for current partial-payment/overdue invoice candidates. Prepare a draft, review its text/recipient and explicitly confirm local delivery. The preview captures the message; it sends no email. Changed balances require a fresh draft, and uncertain attempts are never automatically repeated. Production SMTP acceptance still needs real staging verification.

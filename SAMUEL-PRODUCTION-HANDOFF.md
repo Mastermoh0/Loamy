@@ -2,7 +2,7 @@
 
 > **Living handoff for Samuel, his team and his AI agents.** Update this file after each meaningful feature or integration change. It is an implementation map and release checklist, not evidence that a live deployment has happened.
 
-Last updated: **8 November 2026, Africa/Lagos**.
+Last updated: **9 November 2026, Africa/Lagos**.
 
 | Item | Current position |
 |---|---|
@@ -28,7 +28,7 @@ There are **two distinct execution modes**:
 
 The candidate intentionally keeps business accounts separate from the original personal-app accounts. It does not import the original `main.py`/Gmail backend or trust a personal-app `localStorage` user ID. Merging the code alone does **not** unify identity, financial records or bank connections.
 
-The recorded test cases and release rehearsal validate the stated paths. They are not a certification of the original application's entire security, mobile builds or unknown production configuration. See section 14 for the newest customer-message, insight and export changes; earlier counts are historical.
+The recorded test cases and release rehearsal validate the stated paths. They are not a certification of the original application's entire security, mobile builds or unknown production configuration. See section 16 for taxes/discounts and QR navigation, and section 14 for customer-message, insight and export changes; earlier counts are historical.
 
 ## 2. What is implemented
 
@@ -40,7 +40,7 @@ The recorded test cases and release rehearsal validate the stated paths. They ar
 | Team permissions | Owner, manager, finance, front desk and staff; one assigned location for non-owners; expiring one-use invitations; revocation and audit history | Decide identity/account linking; invitation links are generated but not automatically emailed |
 | Email verification | Expiring one-use links, resend cooldown, matching signed-in recipient, session rotation | Configure real sender and test arrival; local capture is not mailbox-ownership proof |
 | Location financial records | Exact NGN income/expenses, scoped totals, retry protection and reasoned voids preserving history | Connect existing canonical transactions/imports; do not sum independent copies of the same money |
-| Service catalogue | Per-location service names, descriptions, prices and availability; editable order/invoice business details | Confirm pilot services and pricing rules; no inventory, room-availability, tax or discount engine |
+| Service catalogue | Per-location service names, descriptions, prices and availability; editable order/invoice business details | Confirm pilot services, exclusive-tax rates and discount policy; inventory/room availability remain separate |
 | Front-desk orders | Customer full name plus phone/email, quantities, exact totals, unique IDs/references, immutable price snapshots, today/history lists and cancellation history | Confirm operating rules and how existing customers/orders should be linked |
 | Invoices | One stable invoice per order, optional due date, issued snapshot/PDF, preview/download and cancellation marking | Configure actual issuer/payment instructions; shared invoice numbering/migration policy if existing invoices must coexist |
 | Invoice email | PDF attachment, captured test mailbox, SMTP path, delivery history, retry deduplication and explicit resend | Actual sender/recipient checks, deliverability and operational email monitoring |
@@ -57,6 +57,8 @@ The recorded test cases and release rehearsal validate the stated paths. They ar
 | Customer invoice links | Expiring/revocable bearer link, customer invoice/PDF view and current balance, native share/copy handoff | Approve bearer-link privacy and public HTTPS hosting; no automatic WhatsApp/SMS delivery |
 | Financial insights | Owner cash-burn/runway scenario, invoice-level debtors, evidence-backed recurring candidates and tracked subscriptions | Confirm data completeness/cash input and operating assumptions; no live bank balance or automatic external cancellation |
 | Financial history exports | Scoped ZIP with CSV summary/ledger/current balances/allocations/evidence references, manifest/checksums and optional originals | Accept report scope/retention, client download limits and spreadsheet handling in staging |
+| Taxes and discounts | Per-location exclusive tax, order-level fixed/percentage discount, immutable breakdown in orders/invoices/PDFs/exports and adjusted balances | Approve actual rates and discount policy; no filing/remittance or inclusive/per-item tax engine |
+| Location QR links | Downloadable locally generated QR, business/location navigation after sign-in, existing membership checks | HTTPS hosting and phone/printed-code acceptance; QR grants no access or public customer ordering |
 | Production foundation | Private PostgreSQL migration, least-privilege role, serializable writes, secure configuration, container/health checks, dependency lock and release CI definition | Actual staging deployment, provider configuration, backups/alerts and release approval |
 
 ### Role boundaries
@@ -269,7 +271,7 @@ Do not mark these as implemented merely because related legacy code exists elsew
 - Automatic settlement, real bank refunds/transfers and unattended reminder campaigns.
 - Live WhatsApp account/provider acceptance and group capture (disabled); broader receipt formats/languages, supplier credits/refunds and accrual-accounting integration.
 - Generative AI advice, automatic reminder scheduling, direct outbound WhatsApp/SMS and historical period-end receivables snapshots. Deterministic recorded insights, reviewed email notices, customer invoice links and financial-history exports are now implemented.
-- Service inventory/room availability, tax/discount rules, POS integration, QR linking and broader currency/bank support unless separately implemented later.
+- Service inventory/room availability, POS integration and broader currency/bank support. Basic exclusive taxes, order discounts and authenticated location QR navigation are implemented in section 16.
 - Mobile release/tooling follow-up and full regression/security review of the original personal backend when integrated.
 
 ## 10. Instructions for the receiving AI agent
@@ -430,3 +432,42 @@ Remaining gates: real HTTPS/customer-link/recipient testing, actual SMTP arrival
 - Backup/restore, retention, monitoring and rollback sign-off: **Pending**.
 - Approved image digest and owner approval: **Pending**.
 - Production deployment/date and pilot result: **Not performed**.
+
+
+## 16. Taxes, discounts and location QR links — 9 November 2026
+
+### Pricing rules and use
+
+Owners/managers configure the location's tax name (2–60 characters) and rate (0–100%, up to two decimals) in **Services & orders → Service catalogue → Edit tax settings**. Default zero assumes no statutory rate. Service prices are tax-exclusive. Setting changes are audited and affect new orders only; Samuel must approve actual rates/treatment before staging acceptance.
+
+Owners/managers can apply one fixed NGN or percentage discount, with a required reason shown to the customer. Front desk can create taxed orders but cannot discount or edit tax settings. Finance/staff cannot create orders or edit pricing. Non-owners remain confined to their assigned location.
+
+Calculation: sum exact line amounts; round percentage discount half-up to a kobo (fixed discounts are exact); subtract discount; calculate exclusive tax on that remainder, round half-up to a kobo; add tax. A discount must leave a positive taxable amount. Example: NGN 3,000.30 − NGN 300.03 (10%) + NGN 202.52 (7.50%) = **NGN 2,902.79**. The example rate is fictional. Browser adjustment arithmetic uses integers/BigInt; the server is authoritative. NaN/infinity, excess precision, negatives, total-erasing discounts and stale/missing tax expectations with nonzero tax are rejected.
+
+`orders.total_minor` is the adjusted total; immutable `order_pricing` retains original subtotal, discount type/value/reason and tax name/rate/amount. Invoice issuance uses that saved breakdown even if location settings changed after order save. Existing issued snapshots/PDFs remain unchanged. Older orders without pricing rows retain their existing amount with zero adjustments; old retry hashes are preserved for the original input fields. Corrections use existing cancellation/allocation reversal guards and a replacement order, never edit-in-place financial history.
+
+Order/invoice/customer views and generated/cancelled PDFs display the breakdown. Balances, notices, debtors and owner order totals use the adjusted order total. Current-invoice-balances CSV adds subtotal, discount type/value/reason/amount and tax name/rate/amount from the issued snapshot; legacy snapshots get an explicit zero-adjustment fallback. Pricing/order/invoice actions create no extra ledger entry. No tax returns/remittance, tax-inclusive pricing, per-line exemptions/multiple taxes, stacked coupons, free invoices, credit notes, retroactive discounts or profit/accrual accounting are included.
+
+### QR navigation and authorization
+
+Verified members open **Locations → Show location QR** to display/download a black-on-white SVG and select/copy the URL. Generation uses pinned `qrcode==8.2` locally; no external QR service receives it. Usage reference: https://pypi.org/project/qrcode/ (SVG path factory, white background, standard four-module quiet zone).
+
+The encoded URL is `{approved web origin}/business?business={id}&location={id}`. IDs are navigation hints, never authorization; there are no credentials, invitations or customer invoice capabilities in it. Production uses configured HTTPS origin. Preview uses loopback with an explicit warning that a phone cannot open this computer through its own loopback address.
+
+The link selects an accessible business and displays its authorized location/address, with an action to open location orders (or assigned staff expenses). Same-URL sign-in preserves context. Local verification links also preserve it; if a real verification email opens a separate URL/device, finish verification and reopen the QR. Foreign/unavailable links show recovery guidance; every subsequent API independently checks membership/location. Revocation immediately blocks APIs without needing QR-token revocation. This does not assign membership, accept an invitation, prove physical presence, expose a public catalogue or enable customer self-service. Existing customer invoice links remain separate.
+
+### Source and migration
+
+Sources: `workspace_pricing.py`, `workspace_location_links.py`, order/invoice/report modules and shared factory; `WorkspacePricing.jsx`, `WorkspaceLocationLink.jsx` and existing order/invoice/customer/workspace/verification components with scoped CSS. `qrcode==8.2` is pinned in preview requirements/production lock; its Windows-only `colorama==0.4.6` dependency is platform-locked. No npm dependency was added. CI includes new tests/components.
+
+After backup/review, apply **`scripts/sql/enterprise/005_pricing.sql` after 004**, as migration owner. Existing installations apply only missing forward migrations. It adds `location_pricing` and immutable `order_pricing`, bringing the private schema to **38 tables**. Runtime requires `005_pricing`. The runtime can insert/read pricing snapshots but cannot update/delete them; only location tax fields are updatable. No existing amounts/evidence or prior applied migration are rewritten. QR needs no new table. The generator explicitly excludes pricing tables from 001; 005 is a separately reviewed handwritten forward migration. Restore tooling checks 005.
+
+### Actual validation and remaining gates
+
+- **81 tests passed, no skips**, in 113.069 seconds with temporary SQLite, TLS-verified disposable PostgreSQL and real offline OCR. Lint, business-only build and `pip check` passed. Tests cover exact rounding/fixed/percentage amounts, invalid/stale inputs, roles/location restrictions, legacy retry/order compatibility, immutable invoice/PDF, adjusted partial balances/export columns, QR payload/SVG/origin and anonymous/foreign/revoked access, plus PostgreSQL migration/runtime privileges. Backup/restore compared all **38 tables**, including receipt/PDF bytes and financial rows, with the source unchanged.
+- Browser: a fictional owner configured a fictional 7.50% tax, saved a 10%-discounted NGN 3,000.30 order and generated the matching NGN 2,902.79 invoice/outstanding amount. QR opened the correct authorized location and its order workflow. Desktop and 390px invoice/QR layouts were inspected; mobile width equalled scroll width (no horizontal overflow). Screenshots are local QA outputs, not production data. No real message, customer sharing, bank connection, live deployment or upstream merge occurred. Physical phone scanning/printing is untested.
+- The UI detector reported one pre-existing unrelated 3px receipt-warning border; new pricing/QR styles did not introduce it. The first full run's existing OCR test lacked the guarded fallback's `LOAMY_LOCAL_PREVIEW=1`; after correcting that environment, the isolated OCR check and complete 81-case rerun passed. No reader code was loosened.
+- **Clean container build remains a release gate:** Debian package downloads failed/stalled on this machine across normal, host-network and HTTPS/timeout attempts. Those attempts were stopped; the production Dockerfile was left unchanged. To exercise the actual updated code, built a clearly local offline overlay from the previously verified runtime (`loamy-enterprise:before-pricing`), copying only current application modules, compiled frontend, worker and the installed pinned pure-Python QR package/metadata. No databases, environment files or credentials were copied. This local overlay is not a clean production build or a deployable release approval. CI/staging must complete the normal `Dockerfile.enterprise` build with a functioning package service. The restricted-container smoke outcome is recorded below.
+- Release gates: Samuel must approve actual exclusive-tax rates, discount permissions and customer-visible reasons; apply only missing forward migrations in staging; reconcile legacy/new invoices, partial payments and exports; test real phones/printed QR codes and sign-in/revocation on the HTTPS host; complete recovery/release approval. A simulated test is not a live tax-compliance or production-readiness certification.
+
+- **Offline overlay result:** restricted-container rehearsal passed (non-root/read-only filesystem, verified TLS database, frontend/health, fail-closed settings, worker refusal when unconfigured and packaged offline OCR). Linux QR dependency/version/SVG generation and exact adjustment arithmetic passed separately. This confirms the updated runtime on the cached base; it does not replace the pending clean production build.

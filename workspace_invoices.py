@@ -21,6 +21,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from workspace_email import send_smtp
 from workspace_finances import money
 from workspace_payments import payment_summary
+from workspace_pricing import order_pricing
 
 
 class IssueInput(BaseModel):
@@ -67,7 +68,13 @@ def render_invoice(snapshot, cancelled=False):
     table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e9edde')),
                               ('LINEBELOW', (0, 0), (-1, -1), .5, colors.HexColor('#d5d9cc')),
                               ('TOPPADDING', (0, 0), (-1, -1), 9), ('BOTTOMPADDING', (0, 0), (-1, -1), 7)]))
-    story.extend([table, Spacer(1, 20), p('TOTAL: NGN ' + snapshot['total'], title),
+    story.extend([table, Spacer(1, 20)])
+    pricing = snapshot.get('pricing')
+    if pricing:
+        story.extend([p('Subtotal: NGN ' + pricing['subtotal']),
+                      p('Discount: NGN ' + pricing['discount'] + (' (' + pricing['discount_reason'] + ')' if pricing['discount_reason'] else '')),
+                      p(pricing['tax_label'] + ' (' + pricing['tax_rate'] + '%): NGN ' + pricing['tax'])])
+    story.extend([p('TOTAL: NGN ' + snapshot['total'], title),
                   p('Cancelled - do not pay this invoice.' if cancelled else 'Issued invoice - not a receipt. Check Loamy for the current payment balance.', bold)])
     if snapshot['profile']['payment_instructions']:
         story.extend([p('Payment instructions', bold), p(snapshot['profile']['payment_instructions']), p('Include order reference: ' + snapshot['order_reference'])])
@@ -147,7 +154,7 @@ def install_invoices(app, db, verified_user, scope, audit, transport, local_prev
             number = 'INV-' + datetime.now(timezone(timedelta(hours=1))).strftime('%Y%m%d') + '-' + order_id.upper()
             snapshot = {'number': number, 'order_reference': order['reference'], 'location_name': order['location_name'], 'local_preview': local_preview,
                         'profile': json.loads(order['profile_snapshot']), 'customer_name': order['customer_name'], 'customer_contact': order['customer_contact'],
-                        'total': money(order['total_minor']), 'currency': 'NGN', 'due_on': due,
+                        'total': money(order['total_minor']), 'pricing': order_pricing(conn, order_id, order['total_minor']), 'currency': 'NGN', 'due_on': due,
                         'issued_on': datetime.fromtimestamp(now, timezone(timedelta(hours=1))).date().isoformat(),
                         'lines': [{'name': line['name'], 'description': line['description'], 'quantity': line['quantity'],
                                    'unit_price': money(line['unit_minor']), 'total': money(line['unit_minor'] * line['quantity'])}

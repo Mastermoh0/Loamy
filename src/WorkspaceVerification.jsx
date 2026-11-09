@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { workspaceRequest as api } from './services/workspaceService';
 
 export default function WorkspaceVerification({ session, token, invitation, onVerified }) {
@@ -8,6 +8,7 @@ export default function WorkspaceVerification({ session, token, invitation, onVe
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
+  const { search } = useLocation();
   const capture = session.mail_transport === 'capture';
   useEffect(() => {
     let active = true;
@@ -21,7 +22,7 @@ export default function WorkspaceVerification({ session, token, invitation, onVe
     try {
       await api('/email/verify', 'POST', { token });
       await onVerified();
-      navigate(invitation ? `/business#invite=${encodeURIComponent(invitation)}` : '/business', { replace: true });
+      navigate(`/business${search}${invitation ? `#invite=${encodeURIComponent(invitation)}` : ''}`, { replace: true });
     } catch (failure) { setError(failure.message); }
     finally { setBusy(false); }
   }
@@ -52,7 +53,7 @@ export default function WorkspaceVerification({ session, token, invitation, onVe
       {messages.length ? messages.map((mail, i) => <article key={mail.id}>
         <h3>{mail.subject}{i > 0 ? ' (older message)' : ''}</h3>
         <p>To: <span className="selectable">{mail.recipient}</span></p><p>This link works once and expires after 30 minutes.</p>
-        <Link className="workspace-secondary" to={`${mail.verification_url.replace(window.location.origin, '')}${invitation ? `&invite=${encodeURIComponent(invitation)}` : ''}`}>Open verification link</Link>
+        <Link className="workspace-secondary" to={`/business${search}#${mail.verification_url.split('#')[1]}${invitation ? `&invite=${encodeURIComponent(invitation)}` : ''}`}>Open verification link</Link>
       </article>) : <p>No verification message yet. Request one below.</p>}
     </div>}
     <button className="workspace-text-button" disabled={busy} onClick={resend}>{busy ? 'Please wait…' : 'Request a new verification email'}</button>

@@ -4,6 +4,10 @@ Status: **production candidate for owner-controlled staging; not approved for li
 
 This work prepares the new business workflows without accessing Samuel's database, sending customer messages, changing DNS or deploying to a public host. It does not certify the original personal/Gmail backend or Android build as production-ready.
 
+### Taxes, discounts and location QR (9 November 2026)
+
+Current candidate adds per-location exclusive tax, owner/manager fixed/percentage discounts, immutable order/invoice/PDF/customer/export breakdowns, adjusted balances and local authenticated location QR generation. Forward migration `005_pricing.sql` follows 004; runtime requires 005 and 38 private tables. **81 tests passed, no skips**, with TLS PostgreSQL and real offline OCR; lint/build, dependency consistency, 38-table restore and desktop/mobile browser flows passed. Handoff section 16 records exact behavior, container outcome and staging gates. Samuel must approve real rates/policy and test physical QR scanning on HTTPS. No live deployment occurred.
+
 ### Customer messages, insights and exports (8 November 2026)
 
 Current candidate adds reviewed partial-payment/overdue email notices, expiring/revocable customer invoice links, owner cash-runway scenarios/current debtors/recurring-payment tracking and scoped ZIP financial-history/evidence exports. Apply forward migration `004_reports_notifications.sql` after 003; runtime requires 004 and the private schema has 36 tables. **76 backend tests passed, no skips**, including real offline OCR and TLS PostgreSQL, plus notification SMTP-outcome/send-lock, link privacy and exact report/evidence checks. The 36-table recovery and rebuilt restricted-container rehearsal passed. See section 14 of `SAMUEL-PRODUCTION-HANDOFF.md` for current behavior, limits and remaining staging gates. No real customer messages, automatic reminder scheduler, live bank balance or production deployment was enabled. Older evidence below is historical.

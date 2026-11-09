@@ -13,6 +13,7 @@ import WorkspaceOwner from './WorkspaceOwner';
 import WorkspaceSuppliers from './WorkspaceSuppliers';
 import WorkspaceReports from './WorkspaceReports';
 import WorkspaceNotifications from './WorkspaceNotifications';
+import WorkspaceLocationLink from './WorkspaceLocationLink';
 
 const ROLE_NAMES = { owner: 'Owner', manager: 'Manager', finance: 'Finance', front_desk: 'Front desk', staff: 'Staff' };
 const ROLE_NOTES = {
@@ -69,7 +70,9 @@ function AuthForm({ onReady, invitation, preview }) {
 }
 
 export default function BusinessWorkspace() {
-  const { hash } = useLocation();
+  const { hash, search } = useLocation();
+  const linkedBusiness = new URLSearchParams(search).get('business') || '';
+  const linkedLocation = new URLSearchParams(search).get('location') || '';
   const navigate = useNavigate();
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -89,11 +92,11 @@ export default function BusinessWorkspace() {
 
   const refresh = useCallback(async (businessId) => {
     const next = await api('/me');
-    const id = businessId || next.businesses[0]?.id || '';
+    const id = businessId || (next.businesses.some((b) => b.id === linkedBusiness) ? linkedBusiness : next.businesses[0]?.id) || '';
     const detail = id ? await api(`/businesses/${id}`) : null;
     setSession(next); setSelected(id); setWorkspace(detail);
     return next;
-  }, []);
+  }, [linkedBusiness]);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,7 +105,7 @@ export default function BusinessWorkspace() {
         const config = await api('/config');
         if (!cancelled) setPreview(config.local_preview);
         const next = await api('/me');
-        const id = next.businesses[0]?.id || '';
+        const id = (next.businesses.some((b) => b.id === linkedBusiness) ? linkedBusiness : next.businesses[0]?.id) || '';
         const detail = id ? await api(`/businesses/${id}`) : null;
         if (!cancelled) { setSession(next); setSelected(id); setWorkspace(detail); }
       } catch (failure) {
@@ -111,7 +114,7 @@ export default function BusinessWorkspace() {
     }
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [linkedBusiness]);
 
   async function action(work, message) {
     setBusy(true); setError(''); setNotice('');
@@ -154,6 +157,7 @@ export default function BusinessWorkspace() {
   const owner = workspace?.role === 'owner';
   const canFinance = ['owner', 'manager', 'finance'].includes(workspace?.role);
   const canOrders = ['owner', 'manager', 'finance', 'front_desk'].includes(workspace?.role);
+  const locationFromLink = selected === linkedBusiness ? workspace?.locations.find((l) => l.id === linkedLocation) : null;
   return <div className="business-workspace">
     <a href="#workspace-content" className="workspace-skip">Skip to workspace</a>
     <header className="workspace-header">
@@ -195,6 +199,7 @@ export default function BusinessWorkspace() {
                 {session.businesses.map((b) => <option value={b.id} key={b.id}>{b.name}</option>)}
               </select></label></div>
             <div className="workspace-scope"><FontAwesomeIcon icon={faBuilding} /><div><strong>{ROLE_NAMES[workspace.role]} access</strong><p>{ROLE_NOTES[workspace.role]}</p></div><span>{workspace.locations.length} {workspace.locations.length === 1 ? 'location' : 'locations'}</span></div>
+            {linkedLocation && <section className="workspace-location-arrival" aria-label="Location from QR link">{locationFromLink ? <><h2>{locationFromLink.name}</h2><p>{locationFromLink.address}</p><p>Opened from a location link. Your existing permissions still apply.</p>{canOrders ? <button className="workspace-primary" onClick={() => { setFinanceLocation(locationFromLink.id); setTab('orders'); }}>Open this location’s services & orders</button> : <button className="workspace-primary" onClick={() => setTab('expenses')}>Open expenses & receipts</button>}</> : <p role="alert">This location link is unavailable to the selected account or business. Sign in with an invited account, choose its business, or ask the owner for access.</p>}</section>}
             <nav className="workspace-tabs" aria-label="Workspace sections">
               {owner && <button aria-current={tab === 'overview' ? 'page' : undefined} onClick={() => setTab('overview')}>Owner overview</button>}
               <button aria-current={tab === 'locations' ? 'page' : undefined} onClick={() => { setTab('locations'); setInvitationLink(''); }}><FontAwesomeIcon icon={faLocationDot} />Locations</button>
@@ -207,7 +212,7 @@ export default function BusinessWorkspace() {
               {canOrders && <button aria-current={tab === 'orders' ? 'page' : undefined} onClick={() => setTab('orders')}>Services & orders</button>}
               {owner && <button aria-current={tab === 'team' ? 'page' : undefined} onClick={() => setTab('team')}><FontAwesomeIcon icon={faUsers} />Team & access</button>}
             </nav>
-            {tab === 'reports' && canFinance ? <WorkspaceReports key={selected} businessId={selected} locations={workspace.locations} owner={owner} /> : tab === 'notifications' && canFinance ? <WorkspaceNotifications key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'suppliers' && canFinance ? <WorkspaceSuppliers key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'overview' && owner ? <WorkspaceOwner key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'expenses' ? <WorkspaceExpenses key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'payments' && canFinance ? <WorkspacePayments key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'orders' && canOrders ? <WorkspaceOrders key={selected} businessId={selected} role={workspace.role} locations={workspace.locations} /> : tab === 'finances' && canFinance ? <WorkspaceFinances key={`${selected}-${financeLocation}`} businessId={selected} role={workspace.role} locations={workspace.locations} initialLocation={financeLocation}
+            {tab === 'reports' && canFinance ? <WorkspaceReports key={selected} businessId={selected} locations={workspace.locations} owner={owner} /> : tab === 'notifications' && canFinance ? <WorkspaceNotifications key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'suppliers' && canFinance ? <WorkspaceSuppliers key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'overview' && owner ? <WorkspaceOwner key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'expenses' ? <WorkspaceExpenses key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'payments' && canFinance ? <WorkspacePayments key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'orders' && canOrders ? <WorkspaceOrders key={`${selected}-${financeLocation}`} businessId={selected} role={workspace.role} locations={workspace.locations} initialLocation={workspace.locations.some((l) => l.id === financeLocation) ? financeLocation : ''} /> : tab === 'finances' && canFinance ? <WorkspaceFinances key={`${selected}-${financeLocation}`} businessId={selected} role={workspace.role} locations={workspace.locations} initialLocation={financeLocation}
               onChanged={() => refresh(selected).catch((failure) => setError(failure.message))} /> : tab === 'locations' || !owner ? <section aria-labelledby="locations-title">
               <div className="workspace-section-heading"><div><h2 id="locations-title">{owner ? 'Business locations' : 'Your location'}</h2><p>{owner ? 'Each location will keep its own orders and financial activity.' : 'Your access is limited to this location.'}</p></div>
                 {owner && <button className="workspace-secondary" onClick={() => setAddingLocation(!addingLocation)}><FontAwesomeIcon icon={faPlus} /> {addingLocation ? 'Close form' : 'Add location'}</button>}
@@ -218,6 +223,7 @@ export default function BusinessWorkspace() {
               </fieldset></form>}
               <ul className="workspace-locations">{workspace.locations.map((location) => <li key={location.id}>
                 <span className="workspace-location-icon"><FontAwesomeIcon icon={faLocationDot} /></span><div><h3>{location.name}</h3><p>{location.address}</p></div>{canFinance && <button className="workspace-text-button workspace-location-state" onClick={() => { setFinanceLocation(location.id); setTab('finances'); }}>View financial records</button>}
+                <WorkspaceLocationLink businessId={selected} location={location} />
               </li>)}</ul>
               <div className="workspace-next"><h3>{canOrders ? 'Your front desk is ready' : 'Your location workspace'}</h3><p>{canOrders ? 'Use Services & orders for customers, Payments & balances for finance review, and Expenses & receipts for staff submissions.' : 'Open Expenses & receipts to submit evidence and follow your review history.'}</p></div>
               {owner && <button className="workspace-text-button" onClick={() => setNewBusiness(true)}>Set up another business</button>}

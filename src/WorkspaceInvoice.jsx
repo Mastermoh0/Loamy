@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { workspaceRequest as api } from './services/workspaceService';
 import WorkspaceInvoiceShare from './WorkspaceInvoiceShare';
+import { PricingBreakdown } from './WorkspacePricing';
 
 const amount = (value) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(value);
 const DELIVERY = {
@@ -75,6 +76,7 @@ export default function WorkspaceInvoice({ base, order, canIssue, parentBusy }) 
         <p><strong>Bill to: {snapshot.customer_name}</strong><br />{snapshot.customer_contact}</p>
         <p className="workspace-order-reference">Order reference: {snapshot.order_reference}</p>
         <ul className="workspace-order-list">{snapshot.lines.map((line, index) => <li key={index}><div><h4>{line.name}</h4><p>{line.description}</p><small>{line.quantity} × {amount(line.unit_price)}</small></div><strong>{amount(line.total)}</strong></li>)}</ul>
+        <PricingBreakdown pricing={snapshot.pricing} />
         <p className="workspace-order-total">Invoice total <strong>{amount(snapshot.total)}</strong></p>
         <p>{invoice.status === 'cancelled' ? 'Cancelled — do not pay this invoice.' : 'Original issued invoice — not a receipt. Current payment balance is shown above.'}</p>
         {snapshot.profile.payment_instructions && <><h4>Payment instructions</h4><p className="workspace-order-prewrap">{snapshot.profile.payment_instructions}</p><p>Include the order reference above.</p></>}

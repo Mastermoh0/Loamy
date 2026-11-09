@@ -18,6 +18,12 @@ The release image installs Tesseract (executable plus English data) and Poppler.
 
 ## Configure and build
 
+### Pricing and QR release migration 005
+
+Back up/review and apply `005_pricing.sql` after 004 as migration owner; existing installations apply only missing migrations. Runtime requires 005 and 38 private tables. Pricing snapshots are immutable; location settings have restricted updates. Install the updated locked QR dependency. Existing financial/evidence history is unchanged. See handoff section 16 for exact discount-then-exclusive-tax rounding, permissions and legacy behavior. Samuel must approve real rules/rates; zero default does not assert tax exemption.
+
+Staging acceptance: fixed/percentage discounts, half-kobo cases, stale rates, front-desk restrictions, settings changed after order save, original/cancelled PDFs, partial balances and export breakdowns. Verify no extra cash entry. Test QR/sign-in/revocation on intended phones and printed codes using approved HTTPS hosting. QR is navigation, not permission or customer ordering; loopback cannot open this computer from a phone. No new secret/provider is needed.
+
 ### Reporting and customer-message migration 004
 
 For this release, back up/review and apply `004_reports_notifications.sql` after 003 as migration owner; existing installations apply only missing forward migrations. Runtime requires 004, with 36 private tables. It adds notice drafts, hashed invoice-share capabilities and tracked recurring commitments with restricted updates. The schema generator reproduces 001/003/004 without rewriting applied artifacts or copying preview data. Keep the prior image and verify schema compatibility before rollback; never drop history to reverse the release.
