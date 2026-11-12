@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faBuilding, faLocationDot, faUsers, faArrowRight, faPlus, faArrowRightFromBracket, faCheck } from '@fortawesome/free-solid-svg-icons';
@@ -80,6 +80,9 @@ export default function BusinessWorkspace() {
   const [selected, setSelected] = useState('');
   const [workspace, setWorkspace] = useState(null);
   const [tab, setTab] = useState('locations');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuButton = useRef(null);
+  const sectionName = { overview: 'Owner overview', locations: 'Locations', finances: 'Financial records', payments: 'Payments & balances', suppliers: 'Supplier bills', notifications: 'Customer messages', reports: 'Insights & reports', expenses: 'Expenses & receipts', orders: 'Services & orders', team: 'Team & access' }[tab];
   const [financeLocation, setFinanceLocation] = useState('');
   const [addingLocation, setAddingLocation] = useState(false);
   const [newBusiness, setNewBusiness] = useState(false);
@@ -200,7 +203,18 @@ export default function BusinessWorkspace() {
               </select></label></div>
             <div className="workspace-scope"><FontAwesomeIcon icon={faBuilding} /><div><strong>{ROLE_NAMES[workspace.role]} access</strong><p>{ROLE_NOTES[workspace.role]}</p></div><span>{workspace.locations.length} {workspace.locations.length === 1 ? 'location' : 'locations'}</span></div>
             {linkedLocation && <section className="workspace-location-arrival" aria-label="Location from QR link">{locationFromLink ? <><h2>{locationFromLink.name}</h2><p>{locationFromLink.address}</p><p>Opened from a location link. Your existing permissions still apply.</p>{canOrders ? <button className="workspace-primary" onClick={() => { setFinanceLocation(locationFromLink.id); setTab('orders'); }}>Open this location’s services & orders</button> : <button className="workspace-primary" onClick={() => setTab('expenses')}>Open expenses & receipts</button>}</> : <p role="alert">This location link is unavailable to the selected account or business. Sign in with an invited account, choose its business, or ask the owner for access.</p>}</section>}
-            <nav className="workspace-tabs" aria-label="Workspace sections">
+            <div className="workspace-navigation" onKeyDown={(event) => {
+              if (event.key === 'Escape' && menuOpen) {
+                setMenuOpen(false); menuButton.current?.focus();
+              }
+            }}>
+            <button ref={menuButton} className="workspace-menu-toggle" aria-expanded={menuOpen} aria-controls="workspace-sections" onClick={() => setMenuOpen(!menuOpen)}><span>Menu <span aria-hidden="true">·</span> {sectionName}</span><span>{menuOpen ? 'Close' : 'Open'}</span></button>
+            <nav id="workspace-sections" className={`workspace-tabs${menuOpen ? ' workspace-tabs-open' : ''}`} aria-label="Workspace sections" onClick={(event) => {
+              if (event.target.closest('button')) {
+                setMenuOpen(false);
+                if (window.matchMedia('(max-width: 760px)').matches) menuButton.current?.focus();
+              }
+            }}>
               {owner && <button aria-current={tab === 'overview' ? 'page' : undefined} onClick={() => setTab('overview')}>Owner overview</button>}
               <button aria-current={tab === 'locations' ? 'page' : undefined} onClick={() => { setTab('locations'); setInvitationLink(''); }}><FontAwesomeIcon icon={faLocationDot} />Locations</button>
               {canFinance && <button aria-current={tab === 'finances' ? 'page' : undefined} onClick={() => { setFinanceLocation(''); setTab('finances'); }}>Financial records</button>}
@@ -212,6 +226,7 @@ export default function BusinessWorkspace() {
               {canOrders && <button aria-current={tab === 'orders' ? 'page' : undefined} onClick={() => setTab('orders')}>Services & orders</button>}
               {owner && <button aria-current={tab === 'team' ? 'page' : undefined} onClick={() => setTab('team')}><FontAwesomeIcon icon={faUsers} />Team & access</button>}
             </nav>
+            </div>
             {tab === 'reports' && canFinance ? <WorkspaceReports key={selected} businessId={selected} locations={workspace.locations} owner={owner} /> : tab === 'notifications' && canFinance ? <WorkspaceNotifications key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'suppliers' && canFinance ? <WorkspaceSuppliers key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'overview' && owner ? <WorkspaceOwner key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'expenses' ? <WorkspaceExpenses key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'payments' && canFinance ? <WorkspacePayments key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'orders' && canOrders ? <WorkspaceOrders key={`${selected}-${financeLocation}`} businessId={selected} role={workspace.role} locations={workspace.locations} initialLocation={workspace.locations.some((l) => l.id === financeLocation) ? financeLocation : ''} /> : tab === 'finances' && canFinance ? <WorkspaceFinances key={`${selected}-${financeLocation}`} businessId={selected} role={workspace.role} locations={workspace.locations} initialLocation={financeLocation}
               onChanged={() => refresh(selected).catch((failure) => setError(failure.message))} /> : tab === 'locations' || !owner ? <section aria-labelledby="locations-title">
               <div className="workspace-section-heading"><div><h2 id="locations-title">{owner ? 'Business locations' : 'Your location'}</h2><p>{owner ? 'Each location will keep its own orders and financial activity.' : 'Your access is limited to this location.'}</p></div>
