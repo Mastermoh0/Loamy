@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { workspaceRequest as api } from './services/workspaceService';
 import WorkspaceInvoiceShare from './WorkspaceInvoiceShare';
 import { PricingBreakdown } from './WorkspacePricing';
+import WorkspaceCommunications from './WorkspaceCommunications';
 
 const amount = (value) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(value);
 const DELIVERY = {
@@ -12,7 +13,7 @@ const DELIVERY = {
   unknown: 'Delivery uncertain — it may have been sent. Check before sending another copy',
 };
 
-export default function WorkspaceInvoice({ base, order, canIssue, parentBusy }) {
+export default function WorkspaceInvoice({ base, order, canIssue, canSchedule, parentBusy }) {
   const [invoice, setInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -81,6 +82,7 @@ export default function WorkspaceInvoice({ base, order, canIssue, parentBusy }) 
         <p>{invoice.status === 'cancelled' ? 'Cancelled — do not pay this invoice.' : 'Original issued invoice — not a receipt. Current payment balance is shown above.'}</p>
         {snapshot.profile.payment_instructions && <><h4>Payment instructions</h4><p className="workspace-order-prewrap">{snapshot.profile.payment_instructions}</p><p>Include the order reference above.</p></>}
       </article>
+      <WorkspaceCommunications base={base} invoice={invoice} canSend={canIssue&&!parentBusy} canSchedule={canSchedule&&!parentBusy}/>
       {canIssue && invoice.status === 'issued' && <form className="workspace-invoice-email" onSubmit={send}><fieldset disabled={disabled}>
         <h4>Email this invoice</h4>
         <p>{invoice.mail_transport === 'capture' ? 'Local test inbox: the message and PDF attachment stay on this computer. No customer email is sent.' : 'Sends the invoice PDF through the configured email service. Check the customer address before sending.'}</p>

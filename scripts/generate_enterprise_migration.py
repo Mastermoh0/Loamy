@@ -22,9 +22,11 @@ def generate():
         create_app(path)
         with closing(sqlite3.connect(path)) as connection:
             # Freeze migration 001; later additive tables belong in migration 002.
-            objects = connection.execute("SELECT sql FROM sqlite_master WHERE type IN ('table','index') AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND tbl_name NOT IN ('receipt_extractions','expense_extractions','supplier_bills','supplier_payments','whatsapp_challenges','whatsapp_senders','whatsapp_messages','customer_notices','invoice_shares','recurring_commitments','location_pricing','order_pricing') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END,rowid").fetchall()
+            objects = connection.execute("SELECT sql FROM sqlite_master WHERE type IN ('table','index') AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND tbl_name NOT IN ('receipt_extractions','expense_extractions','supplier_bills','supplier_payments','whatsapp_challenges','whatsapp_senders','whatsapp_messages','customer_notices','invoice_shares','recurring_commitments','location_pricing','order_pricing','order_contacts','supplier_email_evidence','reminder_plans','message_receipts') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END,rowid").fetchall()
             intake = connection.execute("SELECT sql FROM sqlite_master WHERE type IN ('table','index') AND sql IS NOT NULL AND tbl_name IN ('supplier_bills','supplier_payments','whatsapp_challenges','whatsapp_senders','whatsapp_messages') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END,rowid").fetchall()
             reporting = connection.execute("SELECT sql FROM sqlite_master WHERE type IN ('table','index') AND sql IS NOT NULL AND tbl_name IN ('customer_notices','invoice_shares','recurring_commitments') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END,rowid").fetchall()
+
+            workflows = connection.execute("SELECT sql FROM sqlite_master WHERE type IN ('table','index') AND sql IS NOT NULL AND tbl_name IN ('order_contacts','supplier_email_evidence','reminder_plans','message_receipts') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END,rowid").fetchall()
     statements = []
     for (sql,) in objects:
         sql = re.sub(r'\bINTEGER\b', 'BIGINT', sql, flags=re.I)
@@ -152,6 +154,24 @@ COMMIT;
 '''
     (target.parent / '004_reports_notifications.sql').write_text('-- Additive release after 003; apply as migration owner.\nBEGIN;\nSET LOCAL search_path TO enterprise, pg_catalog;\n' + '\n\n'.join(report_tables) + '\n' + report_grants, encoding='utf-8', newline='\n')
     print('Generated scripts/sql/enterprise/004_reports_notifications.sql (no data)')
+
+    workflow_sql=[]
+    for (sql,) in workflows:
+        for old,new in [('INTEGER','BIGINT'),('REAL','DOUBLE PRECISION'),('BLOB','BYTEA')]:
+            sql=re.sub(r'\b'+old+r'\b',new,sql,flags=re.I)
+        workflow_sql.append(sql+';')
+    guards='''
+ALTER TABLE reminder_plans ADD FOREIGN KEY(location_id,business_id) REFERENCES locations(id,business_id);
+REVOKE ALL ON order_contacts,supplier_email_evidence,reminder_plans,message_receipts FROM PUBLIC;
+GRANT SELECT,INSERT ON order_contacts,supplier_email_evidence,reminder_plans,message_receipts TO loamy_enterprise_app;
+GRANT UPDATE(whatsapp_consent) ON order_contacts TO loamy_enterprise_app;
+GRANT UPDATE(status,next_run,sent_count,last_result) ON reminder_plans TO loamy_enterprise_app;
+GRANT UPDATE(status,updated_at) ON message_receipts TO loamy_enterprise_app;
+INSERT INTO schema_migrations(version) VALUES ('006_customer_workflows');
+COMMIT;
+'''
+    (target.parent/'006_customer_workflows.sql').write_text('-- Forward upgrade after 005; reviewed backup and migration owner required.\nBEGIN;\nSET LOCAL search_path TO enterprise, pg_catalog;\n'+'\n\n'.join(workflow_sql)+'\n'+guards,encoding='utf-8',newline='\n')
+    print('Generated scripts/sql/enterprise/006_customer_workflows.sql (no data)')
 
 
 if __name__ == '__main__':

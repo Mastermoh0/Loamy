@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { workspaceRequest as api } from './services/workspaceService';
+import WorkspaceOwnerTools from './WorkspaceOwnerTools';
 
 const money = (value) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(value);
 
@@ -7,6 +8,7 @@ export default function WorkspaceOwner({ businessId, locations }) {
   const [filters, setFilters] = useState({ location_id: '', start: '', end: '' });
   const [query, setQuery] = useState(''), [version, setVersion] = useState(0);
   const [data, setData] = useState(null), [error, setError] = useState('');
+  const [inspect,setInspect]=useState(null);
   useEffect(() => {
     let active = true;
     api(`/businesses/${businessId}/owner-dashboard?${query}`).then((result) => {
@@ -39,7 +41,8 @@ export default function WorkspaceOwner({ businessId, locations }) {
       <p><strong>{money(data.totals.payables)}</strong> currently owed to suppliers · {money(data.totals.overdue_payables)} overdue. Unpaid bills are separate from cash outflow and customer money owed.</p>
       <div className="workspace-owner-attention"><p><strong>{money(data.totals.overdue)}</strong> currently overdue · {data.totals.unpaid_invoices} invoices with a balance · {money(data.totals.overpayment)} excess allocations</p><p>{data.totals.pending_review} expenses awaiting review · {data.totals.approved_unposted} approved, awaiting posting</p></div>
       <h3>By location</h3>
-      <ul className="workspace-owner-locations">{data.locations.map((l) => <li key={l.id}><h4>{l.name}</h4><dl>{[['Money in', money(l.inflow)], ['Money out', money(l.outflow)], ['Net movement', money(l.net)], ['Currently owed', money(l.outstanding)], ['Owed to suppliers', money(l.payables)], ['Open orders', l.open_orders], ['Expenses to review', l.pending_review]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></li>)}</ul>
+      <ul className="workspace-owner-locations">{data.locations.map((l) => <li key={l.id}><h4>{l.name}</h4><dl>{[['Money in', money(l.inflow)], ['Money out', money(l.outflow)], ['Net movement', money(l.net)], ['Currently owed', money(l.outstanding)], ['Owed to suppliers', money(l.payables)], ['Open orders', l.open_orders], ['Expenses to review', l.pending_review]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><div className="workspace-order-actions"><button className="workspace-text-button" onClick={()=>setInspect({kind:'orders',locationId:l.id})}>View location orders & invoices</button><button className="workspace-text-button" onClick={()=>setInspect({kind:'expenses',locationId:l.id})}>View location expense evidence</button></div></li>)}</ul>
+      <WorkspaceOwnerTools businessId={businessId} period={data.period} locationId={new URLSearchParams(query).get('location_id')||''} inspect={inspect} onInspect={setInspect}/>
       <h3>Receiving accounts</h3><p>{data.coverage.account_scope}</p>
       {data.accounts.length ? <ul className="workspace-owner-accounts">{data.accounts.map((a) => <li key={a.id}><h4>{a.name} · {a.location}</h4><p>{a.reference}</p><dl><div><dt>Recorded credits</dt><dd>{money(a.recorded_credits)}</dd></div><div><dt>Allocated</dt><dd>{money(a.allocated)}</dd></div><div><dt>Unallocated</dt><dd>{money(a.unallocated)}</dd></div></dl></li>)}</ul> : <p>No receiving accounts in this selection. Add one in Payments & balances.</p>}
       <details><summary>What these figures include</summary><p>{data.coverage.flow_scope}</p><p>{data.coverage.receivables_scope}</p><p>No live bank feed is connected. Values reflect recorded activity and may be incomplete.</p><p>Record sources: {Object.entries(data.coverage.sources).map(([source, count]) => `${source.replaceAll('_', ' ')} (${count})`).join(', ') || 'No posted activity in this period'}.</p><p>Updated {new Date(data.coverage.generated_at * 1000).toLocaleString('en-GB')}.</p></details>

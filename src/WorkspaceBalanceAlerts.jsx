@@ -1,0 +1,7 @@
+import {useEffect,useState} from 'react';
+import {workspaceRequest as api} from './services/workspaceService';
+export default function WorkspaceBalanceAlerts({base,onOpen}){
+  const [data,setData]=useState(null),[error,setError]=useState(''),[version,setVersion]=useState(0);
+  useEffect(()=>{let active=true;async function load(){try{const r=await api(base+'/front-desk-alerts');if(active){setData(r);setError('');}}catch(f){if(active)setError(f.message);}}load();const timer=setInterval(load,30000);return()=>{active=false;clearInterval(timer);};},[base,version]);
+  return <details className="workspace-operation-block"><summary>Partial-payment & overdue alerts{data?` (${data.alerts.length})`:''}</summary><p>Refreshes every 30 seconds while this section is mounted. These are recorded balances, not bank confirmation or desktop push messages.</p>{error&&<p role="alert" className="workspace-error">{error}</p>}<button className="workspace-text-button" onClick={()=>setVersion(v=>v+1)}>Refresh balance alerts</button>{data&&<><ul className="workspace-order-list">{data.alerts.map(a=><li key={a.invoice_id}><div><h4>{a.customer}</h4><p>{a.number} · Remaining NGN {a.remaining} · {a.overdue?'Overdue':'Partial payment'}</p><button className="workspace-secondary" onClick={()=>onOpen(a.order_id)}>Open alerted order</button></div></li>)}</ul>{!data.alerts.length&&<p>No partial-payment or overdue alerts.</p>}{data.truncated&&<p>Latest 1,000 issued invoices checked; use reports for full history.</p>}</>}</details>;
+}

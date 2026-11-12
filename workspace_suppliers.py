@@ -10,6 +10,7 @@ from fastapi import Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from workspace_expenses import receipt_bytes
 from workspace_finances import FinancialInput, VoidInput, money
+from workspace_supplier_email import email_attachments, install_supplier_email
 
 
 class BillInput(BaseModel):
@@ -21,7 +22,9 @@ class BillInput(BaseModel):
     amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
     issued_on: date
     due_on: date
-    receipt_base64: str = Field(min_length=8, max_length=2800000)
+    receipt_base64: str = Field(default='', max_length=2800000)
+    source_email_base64: str = Field(default='', max_length=2800000)
+    email_attachment_index: int = Field(default=0, strict=True, ge=0, le=39)
     idempotency_key: str = Field(min_length=16, max_length=80, pattern=r'^[a-zA-Z0-9_-]+$')
     extraction_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
 
@@ -98,6 +101,8 @@ def install_suppliers(app, db, verified_user, membership, audit):
             payments=[{'id': p['id'], 'record_id': p['record_id'], 'amount': money(p['amount_minor']), 'reason': p['reason'], 'reversed_at': p['reversed_at'], 'reverse_reason': p['reverse_reason']} for p in payments])
         extracted = conn.execute('SELECT result FROM receipt_extractions WHERE id=?', (bill['extraction_id'],)).fetchone() if bill['extraction_id'] else None
         result['suggestions'] = json.loads(extracted['result'])['suggested'] if extracted else None
+        source=conn.execute('SELECT email_sha256,sender,subject,attachment_sha256 FROM supplier_email_evidence WHERE bill_id=?',(bill['id'],)).fetchone()
+        result['email_source']=dict(source) if source else None
         return result
 
     @app.get(base)
@@ -115,13 +120,35 @@ def install_suppliers(app, db, verified_user, membership, audit):
                 'overdue': money(sum(max(0, r['amount_minor'] - int(r['paid'])) for r in totals if r['due_on'] < today)),
                 'debits': [{'id': r['id'], 'description': r['description'], 'occurred_on': r['occurred_on'], 'available': money(int(r['available']))} for r in debits if r['available'] > 0]}
 
+    install_supplier_email(db)
+
+    class EmailPreview(BaseModel):
+        model_config = ConfigDict(extra='forbid')
+        email_base64: str = Field(min_length=8,max_length=2800000)
+
+    @app.post(base + '/email-preview')
+    def preview_email(business_id: str,location_id: str,data:EmailPreview,actor=Depends(verified_user)):
+        with db() as conn:
+            scope(conn,business_id,location_id,actor)
+        return email_attachments(data.email_base64)
+
     @app.post(base, status_code=201)
     def import_bill(business_id: str, location_id: str, data: BillInput, actor=Depends(verified_user)):
         with db() as conn:
             scope(conn, business_id, location_id, actor)
-        raw, mime, extension = receipt_bytes(data.receipt_base64)
+        source=None
+        encoded=data.receipt_base64
+        if data.source_email_base64:
+            source=email_attachments(data.source_email_base64)
+            attachment=next((a for a in source['attachments'] if a['index']==data.email_attachment_index),None)
+            if not attachment: raise HTTPException(422,'Choose an attachment from this email')
+            if encoded and encoded!=attachment['receipt_base64']: raise HTTPException(422,'Selected invoice does not match the email attachment')
+            encoded=attachment['receipt_base64']
+        raw, mime, extension = receipt_bytes(encoded)
         digest = hashlib.sha256(raw).hexdigest()
-        signature = hashlib.sha256(json.dumps([location_id, data.model_dump(mode='json', exclude={'receipt_base64', 'idempotency_key'}), digest], sort_keys=True).encode()).hexdigest()
+        request=data.model_dump(mode='json',exclude={'receipt_base64','idempotency_key','source_email_base64','email_attachment_index'})
+        if source: request['email_source']=[source['email_sha256'],data.email_attachment_index]
+        signature = hashlib.sha256(json.dumps([location_id,request,digest], sort_keys=True).encode()).hexdigest()
         with db() as conn:
             conn.execute('BEGIN IMMEDIATE'); scope(conn, business_id, location_id, actor)
             previous = conn.execute('SELECT id,request_hash FROM supplier_bills WHERE business_id=? AND idempotency_key=?', (business_id, data.idempotency_key)).fetchone()
@@ -138,6 +165,8 @@ def install_suppliers(app, db, verified_user, membership, audit):
             bid = secrets.token_hex(16)
             conn.execute('INSERT INTO supplier_bills (id,business_id,location_id,actor_id,vendor,vendor_key,reference,reference_key,description,category,amount_minor,issued_on,due_on,receipt,mime,extension,receipt_hash,extraction_id,created_at,idempotency_key,request_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                 (bid, business_id, location_id, actor['id'], data.vendor, data.vendor.casefold(), data.reference, data.reference.casefold(), data.description, data.category, int(data.amount * 100), data.issued_on.isoformat(), data.due_on.isoformat(), raw, mime, extension, digest, data.extraction_id, time.time(), data.idempotency_key, signature))
+            if source:
+                conn.execute('INSERT INTO supplier_email_evidence VALUES (?,?,?,?,?)',(bid,source['email_sha256'],source['sender'],source['subject'],digest))
             audit(conn, business_id, actor['id'], f'Imported supplier bill {bid}; no expense posted')
         return {'id': bid, 'duplicate': False}
 

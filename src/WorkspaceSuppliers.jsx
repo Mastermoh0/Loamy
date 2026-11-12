@@ -13,6 +13,7 @@ function SupplierLocation({ businessId, locationId }) {
   const [data, setData] = useState(null), [version, setVersion] = useState(0);
   const [creating, setCreating] = useState(false), [busy, setBusy] = useState(false);
   const [error, setError] = useState(''), [notice, setNotice] = useState(''), [extraction, setExtraction] = useState(null);
+  const [emailSource,setEmailSource]=useState(null),[attachmentIndex,setAttachmentIndex]=useState(0);
   const formRef = useRef(null), retry = useRef(null), paymentRetry = useRef(null);
   useEffect(() => {
     let active = true;
@@ -28,7 +29,7 @@ function SupplierLocation({ businessId, locationId }) {
   async function extract() {
     await action(async () => {
       const form = formRef.current;
-      const receipt_base64 = await readInvoice(form.elements.invoice.files[0]);
+      const receipt_base64 = emailSource?emailSource.preview.attachments.find(a=>a.index===attachmentIndex).receipt_base64:await readInvoice(form.elements.invoice.files[0]);
       const result = await api(`/businesses/${businessId}/locations/${locationId}/expenses/extract`, 'POST', { receipt_base64 });
       for (const [key, value] of Object.entries(result.suggested)) {
         const field = key === 'occurred_on' ? 'issued_on' : key;
@@ -40,12 +41,12 @@ function SupplierLocation({ businessId, locationId }) {
   async function importBill(event) {
     event.preventDefault(); const form = event.currentTarget;
     await action(async () => {
-      const values = Object.fromEntries(new FormData(form)); const receipt_base64 = await readInvoice(values.invoice); delete values.invoice;
-      const body = { ...values, receipt_base64, extraction_id: extraction?.id || null };
+      const values = Object.fromEntries(new FormData(form)); const receipt_base64 = emailSource?'':await readInvoice(values.invoice); delete values.invoice;
+      const body = { ...values, receipt_base64, extraction_id: extraction?.id || null, ...(emailSource?{source_email_base64:emailSource.base64,email_attachment_index:attachmentIndex}:{}) };
       const signature = JSON.stringify(body);
       if (retry.current?.signature !== signature) retry.current = { signature, key: crypto.randomUUID() };
       await api(base, 'POST', { ...body, idempotency_key: retry.current.key });
-      retry.current = null; setCreating(false); setExtraction(null);
+      retry.current = null; setCreating(false); setExtraction(null);setEmailSource(null);
     }, 'Supplier bill imported. No paid expense was created.');
   }
   async function allocate(event, bill) {
@@ -62,7 +63,8 @@ function SupplierLocation({ businessId, locationId }) {
     {error && <p className="workspace-error" role="alert">{error}</p>}{notice && <p className="workspace-notice" role="status">{notice}</p>}
     <div className="workspace-order-actions"><button className="workspace-primary" disabled={busy} onClick={() => { setCreating(!creating); setExtraction(null); }}>{creating ? 'Close import form' : 'Import supplier invoice'}</button><button className="workspace-text-button" disabled={busy} onClick={() => setVersion((v) => v + 1)}>Refresh supplier bills</button></div>
     {creating && <form ref={formRef} className="workspace-order-form" onSubmit={importBill}><fieldset disabled={busy}><h3>Import a bill owed</h3>
-      <label className="workspace-field"><span>Supplier invoice file</span><input name="invoice" type="file" required accept="image/png,image/jpeg,application/pdf" onChange={() => setExtraction(null)} /><small>Private original evidence, up to 2 MB. Importing records a liability, not payment.</small></label>
+      <details><summary>Import an attachment from an email file</summary><p>Export the supplier email as .eml and choose it here (up to 2 MB, 1–5 PDF/JPEG/PNG attachments). This reviews one email file; it does not connect or poll your mailbox. Sender headers are unverified.</p><label className="workspace-field"><span>Supplier email (.eml)</span><input type="file" accept=".eml,message/rfc822" disabled={busy} onChange={e=>{const file=e.target.files[0];setEmailSource(null);setExtraction(null);if(file)action(async()=>{const base64=await readInvoice(file);const preview=await api(base+'/email-preview','POST',{email_base64:base64});setEmailSource({base64,preview});setAttachmentIndex(preview.attachments[0].index);},'Email attachments ready for review. Nothing has been posted.');}}/></label>{emailSource&&<><p>Unverified sender: {emailSource.preview.sender}<br/>Subject: {emailSource.preview.subject}</p><label className="workspace-field"><span>Email invoice attachment</span><select value={attachmentIndex} onChange={e=>{setAttachmentIndex(Number(e.target.value));setExtraction(null);}}>{emailSource.preview.attachments.map(a=><option key={a.index} value={a.index}>{a.filename}</option>)}</select></label><button className="workspace-text-button" type="button" onClick={()=>{setEmailSource(null);setExtraction(null);}}>Use an invoice file instead</button></>}</details>
+      {!emailSource&&<label className="workspace-field"><span>Supplier invoice file</span><input name="invoice" type="file" required accept="image/png,image/jpeg,application/pdf" onChange={() => setExtraction(null)} /><small>Private original evidence, up to 2 MB. Importing records a liability, not payment.</small></label>}
       <button type="button" className="workspace-secondary" onClick={extract}>Extract invoice details</button>
       {extraction && <div className="workspace-receipt-extraction"><ul>{extraction.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div>}
       <label className="workspace-field"><span>Supplier name</span><input name="vendor" required minLength={2} maxLength={120} /></label>
@@ -77,7 +79,7 @@ function SupplierLocation({ businessId, locationId }) {
       <div className="workspace-operation-block"><h3>Money owed to suppliers</h3><p><strong>{money(data.outstanding)}</strong> outstanding · {money(data.overdue)} overdue</p><p>Separate from money received and paid expenses. To record a payment, create or confirm its existing expense debit in Financial records, then link it below.</p></div>
       <p>Showing {data.bills.length} of {data.count} bills. Imported details and original files stay in history; correct errors by voiding and importing a new invoice.</p>
       {!data.bills.length && <p>No supplier bills yet at this location.</p>}
-      <ul className="workspace-order-list">{data.bills.map((bill) => <li key={bill.id}><div><h4>{bill.vendor} · {bill.reference}</h4><p>{bill.description} · {bill.category}</p><p>Total {money(bill.amount)} · Paid {money(bill.paid)} · Owed {money(bill.outstanding)} · {bill.payment_status.replace('_', ' ')}{bill.overdue ? ' · Overdue' : ''}</p><p>Invoice {bill.issued_on} · Due {bill.due_on}</p>
+      <ul className="workspace-order-list">{data.bills.map((bill) => <li key={bill.id}><div><h4>{bill.vendor} · {bill.reference}</h4><p>{bill.description} · {bill.category}</p><p>Total {money(bill.amount)} · Paid {money(bill.paid)} · Owed {money(bill.outstanding)} · {bill.payment_status.replace('_', ' ')}{bill.overdue ? ' · Overdue' : ''}</p><p>Invoice {bill.issued_on} · Due {bill.due_on}</p>{bill.email_source&&<details><summary>Email import provenance</summary><p>Unverified sender: {bill.email_source.sender}<br/>Subject: {bill.email_source.subject}</p><p className="workspace-order-reference">Email SHA-256: {bill.email_source.email_sha256}<br/>Attachment SHA-256: {bill.email_source.attachment_sha256}</p><p>Headers are not proof of sender identity. The original selected invoice is retained; no mailbox was connected.</p></details>}
         <a className="workspace-text-button" href={`/enterprise-api${base}/${bill.id}/invoice`} download>Download original supplier invoice</a>
         {bill.void_reason && <p>Voided: {bill.void_reason}</p>}
         {bill.suggestions && <details><summary>Original extraction suggestions</summary><p>{bill.suggestions.vendor || 'Vendor not found'} · {bill.suggestions.amount ? money(bill.suggestions.amount) : 'Amount not found'} · {bill.suggestions.occurred_on || 'Date not found'}</p></details>}

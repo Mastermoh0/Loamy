@@ -221,3 +221,5 @@
 .workspace-locations li > .workspace-location-link { flex: 1 1 100%; min-width: 0; }
 .workspace-location-qr { display: block; max-width: 100%; height: auto; background: white; margin: 16px 0; }
 .workspace-location-link p { max-width: 65ch; }
+
+.workspace-owner-evidence { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow-y: auto; font-size: 13px; }

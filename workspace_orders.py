@@ -12,6 +12,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from workspace_finances import money, VoidInput
 from workspace_invoices import install_invoices
 from workspace_pricing import PricingInput, install_pricing, location_pricing, order_pricing, calculate
+from workspace_contacts import ContactInput, CONTACT_FIELDS, contacts_for, install_contacts, save_contacts
+from pydantic import model_validator
 
 
 class Input(BaseModel):
@@ -37,15 +39,23 @@ class OrderLine(Input):
     expected_price: Decimal = Field(gt=0, max_digits=10, decimal_places=2)
 
 
-class OrderInput(Input):
+class OrderInput(Input, ContactInput):
     customer_name: str = Field(min_length=2, max_length=120)
-    customer_contact: str = Field(min_length=3, max_length=254)
+    customer_contact: str = Field(default='', max_length=254)
     lines: list[OrderLine] = Field(min_length=1, max_length=20)
     idempotency_key: str = Field(min_length=16, max_length=80, pattern=r'^[a-zA-Z0-9_-]+$')
     expected_tax_rate: Decimal | None = Field(default=None, ge=0, le=100, max_digits=5, decimal_places=2)
     discount_type: Literal['none', 'fixed', 'percent'] = 'none'
     discount_value: Decimal = Field(default=Decimal('0'), ge=0, max_digits=10, decimal_places=2)
     discount_reason: str = Field(default='', max_length=240)
+
+    @model_validator(mode='after')
+    def contact_required(self):
+        if not self.customer_contact:
+            self.customer_contact = self.customer_email or self.customer_whatsapp
+        if len(self.customer_contact) < 3:
+            raise ValueError('Enter a customer email, WhatsApp number or contact')
+        return self
 
     @field_validator('lines')
     @classmethod
@@ -101,6 +111,7 @@ def install_orders(app, db, verified_user, membership, audit, transport, local_p
         return location
 
     install_pricing(db)
+    install_contacts(db)
 
     def profile(conn, bid, location):
         saved = conn.execute('SELECT invoice_name,address,payment_instructions FROM location_profiles WHERE location_id=?', (location['id'],)).fetchone()
@@ -164,7 +175,7 @@ def install_orders(app, db, verified_user, membership, audit, transport, local_p
     def create_order(business_id: str, location_id: str, data: OrderInput, actor=Depends(verified_user)):
         request_data = data.model_dump(mode='json', exclude={'idempotency_key'})
         # Preserve retry hashes for orders created before pricing fields existed.
-        for field in {'expected_tax_rate', 'discount_type', 'discount_value', 'discount_reason'} - data.model_fields_set:
+        for field in ({'expected_tax_rate', 'discount_type', 'discount_value', 'discount_reason'} | CONTACT_FIELDS) - data.model_fields_set:
             request_data.pop(field)
         request_hash = hashlib.sha256(json.dumps(request_data, sort_keys=True).encode()).hexdigest()
         with db() as conn:
@@ -204,6 +215,7 @@ def install_orders(app, db, verified_user, membership, audit, transport, local_p
                           json.dumps(profile(conn, business_id, location)), request_hash, data.idempotency_key))
             for position, line in enumerate(lines):
                 conn.execute('INSERT INTO order_lines VALUES (?,?,?,?,?,?,?)', (oid, position, *line))
+            save_contacts(conn, oid, data)
             conn.execute('INSERT INTO order_pricing VALUES (?,?,?,?,?,?,?,?,?)',
                          (oid, subtotal, data.discount_type, int(data.discount_value * 100), discount, data.discount_reason, pricing['tax_label'], rate_bps, tax))
             audit(conn, business_id, actor['id'], f'Created order {reference} at location {location_id}')
@@ -237,6 +249,7 @@ def install_orders(app, db, verified_user, membership, audit, transport, local_p
             order = dict(row)
             order['total'] = money(order.pop('total_minor'))
             order['pricing'] = order_pricing(conn, order_id, row['total_minor'])
+            order['contacts'] = contacts_for(conn, order_id, row['customer_contact'])
             order['profile'] = json.loads(order.pop('profile_snapshot'))
             order.pop('request_hash')
             order.pop('idempotency_key')

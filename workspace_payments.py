@@ -63,6 +63,8 @@ def payment_summary(conn, invoice):
 
 
 def guard_balance_notice(conn, invoice_id):
+    if conn.execute("SELECT id FROM invoice_deliveries WHERE invoice_id=? AND status='sending' AND updated_at>?", (invoice_id,time.time()-120)).fetchone():
+        raise HTTPException(409,'An invoice message is being sent. Wait for its result before changing allocations.')
     if conn.execute("SELECT id FROM customer_notices WHERE invoice_id=? AND status='sending' AND updated_at>?", (invoice_id, time.time() - 120)).fetchone():
         raise HTTPException(409, 'A customer balance message is being sent. Wait for its result before changing allocations.')
 

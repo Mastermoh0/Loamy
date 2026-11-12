@@ -3,6 +3,8 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
 import os
+import json
+import time
 from pathlib import Path
 import re
 import secrets
@@ -65,6 +67,7 @@ class PostgresReleaseTests(unittest.TestCase):
             admin.execute((ROOT / 'scripts/sql/enterprise/003_supplier_whatsapp.sql').read_text())
             admin.execute((ROOT / 'scripts/sql/enterprise/004_reports_notifications.sql').read_text())
             admin.execute((ROOT / 'scripts/sql/enterprise/005_pricing.sql').read_text())
+            admin.execute((ROOT / 'scripts/sql/enterprise/006_customer_workflows.sql').read_text())
             self.assertEqual(admin.execute("SELECT name FROM enterprise.businesses WHERE id='upgrade-sentinel'").fetchone()[0], 'Existing upgrade fixture')
             admin.execute("DELETE FROM enterprise.businesses WHERE id='upgrade-sentinel'")
         self.env = patch.dict(os.environ, ProductionConfigTests().settings(LOAMY_WORKSPACE_WEB_ORIGIN='https://workspace.example.test',
@@ -134,6 +137,44 @@ class PostgresReleaseTests(unittest.TestCase):
             for query in ['UPDATE enterprise.order_pricing SET tax_minor=1', 'DELETE FROM enterprise.order_pricing', 'DELETE FROM enterprise.location_pricing']:
                 with self.assertRaises(psycopg.errors.InsufficientPrivilege):
                     conn.execute(query)
+
+    def test_customer_workflow_runtime_grants_worker_outcomes_and_webhook_receipts(self):
+        import psycopg
+        self.fixture()
+        response=self.owner.post(self.base+'/orders',json={'customer_name':'Contact Guest','customer_email':'contact@example.test','customer_whatsapp':'+2348012345678','whatsapp_consent':True,'preferred_channel':'whatsapp',
+            'lines':[{'service_id':self.sid,'quantity':1,'expected_price':'50000.00'}],'idempotency_key':'production-contact-order-01'})
+        self.assertEqual(response.status_code,201,response.text)
+        oid=response.json()['id'];invoice=self.owner.post(self.base+f'/orders/{oid}/invoice',json={}).json()['invoice'];iid=invoice['id']
+        with psycopg.connect(self.admin_dsn,autocommit=True) as conn:
+            conn.execute('UPDATE enterprise.invoices SET due_on=%s WHERE id=%s',((datetime.now(timezone(timedelta(hours=1)))-timedelta(days=1)).date().isoformat(),iid))
+        route={'phone_id':'1234567890','invoice_template':'invoice_test','reminder_template':'reminder_test','language':'en_US'}
+        env={'LOAMY_WHATSAPP_APP_SECRET':'x'*32,'LOAMY_WHATSAPP_VERIFY_TOKEN':'v'*32,'LOAMY_WHATSAPP_ACCESS_TOKEN':'fake-provider-token','LOAMY_WHATSAPP_GRAPH_VERSION':'v99.0','LOAMY_WHATSAPP_ROUTES':json.dumps({'1234567890':self.bid}),'LOAMY_WHATSAPP_OUTBOUND':json.dumps({self.bid:route})}
+        with patch.dict(os.environ,env):
+            from enterprise_production import create_app
+            app=create_app();client=TestClient(app,base_url='https://workspace.example.test',headers={'Origin':'https://workspace.example.test'});client.cookies.update(self.owner.cookies)
+            comm=self.base+f'/invoices/{iid}'
+            choice={'channel':'whatsapp','confirm':True,'idempotency_key':'production-wa-invoice-01'}
+            with patch('workspace_followups.send_whatsapp',return_value='provider-invoice-test') as send:
+                sent=client.post(comm+'/deliver',json=choice)
+                self.assertEqual(sent.status_code,200,sent.text);self.assertEqual(sent.json()['status'],'accepted')
+                self.assertTrue(client.post(comm+'/deliver',json=choice).json()['duplicate']);self.assertEqual(send.call_count,1)
+            import hmac,hashlib
+            payload={'object':'whatsapp_business_account','entry':[{'changes':[{'field':'messages','value':{'messaging_product':'whatsapp','metadata':{'phone_number_id':'1234567890'},'statuses':[{'id':'provider-invoice-test','status':'delivered'}]}}]}]}
+            raw=json.dumps(payload).encode();signature='sha256='+hmac.new(b'x'*32,raw,hashlib.sha256).hexdigest()
+            public=TestClient(app,base_url='https://workspace.example.test')
+            event=public.post('/enterprise-api/integrations/whatsapp/webhook',content=raw,headers={'X-Hub-Signature-256':signature,'Content-Type':'application/json'})
+            self.assertEqual(event.status_code,200,event.text)
+            self.assertEqual(client.get(comm+'/communications').json()['deliveries'][0]['status'],'delivered')
+            plan=client.post(comm+'/reminder-plans',json={**choice,'idempotency_key':'production-reminder-plan-01','first_run_at':time.time(),'max_sends':2,'interval_days':1})
+            self.assertEqual(plan.status_code,201,plan.text)
+            with patch('workspace_followups.send_whatsapp',side_effect=OSError('uncertain provider connection')) as send:
+                run=app.state.run_due_followup();self.assertEqual(run['status'],'paused');self.assertEqual(run['result'],'unknown')
+                self.assertFalse(app.state.run_due_followup()['processed']);self.assertEqual(send.call_count,1)
+            self.assertEqual(client.post(self.base+'/followups/run-local').status_code,404)
+            self.assertEqual(client.post(f'/enterprise-api/businesses/{self.bid}/financial-review/pdf',json={'start':datetime.now(timezone.utc).date().isoformat(),'end':datetime.now(timezone.utc).date().isoformat()}).status_code,200)
+        with psycopg.connect(self.app_dsn,autocommit=True) as conn:
+            for query in ['UPDATE enterprise.order_contacts SET customer_whatsapp=\'spoof\'','DELETE FROM enterprise.reminder_plans','UPDATE enterprise.reminder_plans SET recipient=\'spoof\'','DELETE FROM enterprise.supplier_email_evidence']:
+                with self.assertRaises(psycopg.errors.InsufficientPrivilege):conn.execute(query)
 
     def test_auth_headers_scope_and_private_schema(self):
         import psycopg

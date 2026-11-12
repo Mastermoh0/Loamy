@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr t
 RUN pip install --no-cache-dir -r requirements-production.lock && useradd --uid 10001 --create-home workspace
 COPY enterprise_preview.py enterprise_production.py enterprise_static.py workspace_*.py ./
 COPY scripts/process_whatsapp_inbox.py ./scripts/process_whatsapp_inbox.py
+COPY scripts/process_invoice_followups.py ./scripts/process_invoice_followups.py
 COPY --from=frontend /app/dist ./dist
 USER workspace
 EXPOSE 8080

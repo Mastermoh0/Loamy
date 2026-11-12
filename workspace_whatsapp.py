@@ -242,6 +242,8 @@ def install_whatsapp(app, db, verified_user, membership, audit, *, local_preview
                         pid = value.get('metadata', {}).get('phone_number_id', '')
                         bid = (settings.routes or {}).get(pid)
                         if bid:
+                            if hasattr(app.state,'whatsapp_delivery_status'):
+                                app.state.whatsapp_delivery_status(conn,pid,value.get('statuses',[]))
                             for message in value.get('messages', []):
                                 accept_message(conn, bid, pid, message)
         except (ValueError, TypeError, AttributeError):

@@ -132,6 +132,8 @@ def install_reports(app, db, verified_user, membership, audit):
                 'debtors': debtors, 'recurring_candidates': recurring, 'commitments': plans, 'declared_monthly_commitments': format(monthly, '.2f'),
                 'limitations': ['Runway uses completed calendar days and recorded movements, not bank balances or a guarantee of future cash.', 'Current debtors include all issued invoices regardless of the observation period.', 'Recurring candidates require matching location, description, category and amount on at least three regularly spaced dates; they are unconfirmed.', 'Declared subscriptions are estimates of commitments; they do not create expenses or get added again to historical burn.', 'Unrecorded transactions and unclassified internal transfers can change these results.']}
 
+    app.state.recorded_insights = insights
+
     @app.post(base + '/recurring-commitments', status_code=201)
     def add_commitment(business_id: str, data: CommitmentInput, actor=Depends(verified_user)):
         signature = hashlib.sha256(json.dumps(data.model_dump(mode='json', exclude={'idempotency_key'}), sort_keys=True).encode()).hexdigest()

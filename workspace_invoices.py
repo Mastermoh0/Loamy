@@ -22,6 +22,7 @@ from workspace_email import send_smtp
 from workspace_finances import money
 from workspace_payments import payment_summary
 from workspace_pricing import order_pricing
+from workspace_contacts import contacts_for
 
 
 class IssueInput(BaseModel):
@@ -154,7 +155,7 @@ def install_invoices(app, db, verified_user, scope, audit, transport, local_prev
             number = 'INV-' + datetime.now(timezone(timedelta(hours=1))).strftime('%Y%m%d') + '-' + order_id.upper()
             snapshot = {'number': number, 'order_reference': order['reference'], 'location_name': order['location_name'], 'local_preview': local_preview,
                         'profile': json.loads(order['profile_snapshot']), 'customer_name': order['customer_name'], 'customer_contact': order['customer_contact'],
-                        'total': money(order['total_minor']), 'pricing': order_pricing(conn, order_id, order['total_minor']), 'currency': 'NGN', 'due_on': due,
+                        'total': money(order['total_minor']), 'contacts': contacts_for(conn, order_id, order['customer_contact']), 'pricing': order_pricing(conn, order_id, order['total_minor']), 'currency': 'NGN', 'due_on': due,
                         'issued_on': datetime.fromtimestamp(now, timezone(timedelta(hours=1))).date().isoformat(),
                         'lines': [{'name': line['name'], 'description': line['description'], 'quantity': line['quantity'],
                                    'unit_price': money(line['unit_minor']), 'total': money(line['unit_minor'] * line['quantity'])}

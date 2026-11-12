@@ -140,6 +140,8 @@ def install_notifications(app, db, verified_user, membership, audit, transport, 
             notice = conn.execute('SELECT * FROM customer_notices WHERE id=? AND business_id=? AND location_id=?', (notice_id, business_id, location_id)).fetchone()
             if not notice:
                 raise HTTPException(404, 'Notice not found')
+            if notice['transport'] not in {'smtp','capture'}:
+                raise HTTPException(409,'Manage this WhatsApp attempt through its invoice communication history; never retry it as email')
             if notice['status'] in {'captured', 'accepted', 'sending', 'unknown'}:
                 return {'id': notice_id, 'status': notice['status'], 'duplicate': True}
             if notice['status'] == 'failed' and not data.confirm_retry:

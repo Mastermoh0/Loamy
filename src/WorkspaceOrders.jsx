@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { workspaceRequest as api } from './services/workspaceService';
 import WorkspaceInvoice from './WorkspaceInvoice';
 import WorkspacePricing, { PricingBreakdown } from './WorkspacePricing';
+import WorkspaceBalanceAlerts from './WorkspaceBalanceAlerts';
 
 const currency = (amount) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
 const minor = (amount) => Math.round(Number(amount) * 100);
@@ -35,15 +36,19 @@ function NewOrder({ services, pricing, canDiscount, busy, onSave, onClose }) {
   return <form className="workspace-order-form" onSubmit={(event) => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
-    onSave({ customer_name: values.customer_name, customer_contact: values.customer_contact, expected_tax_rate: pricing.tax_rate,
+    onSave({ customer_name: values.customer_name, customer_contact: values.customer_contact, customer_email: values.customer_email, customer_whatsapp: values.customer_whatsapp,
+      additional_emails: [values.extra_email_1,values.extra_email_2,values.extra_email_3].filter(Boolean), preferred_channel: values.preferred_channel, whatsapp_consent: values.whatsapp_consent==='on', expected_tax_rate: pricing.tax_rate,
       discount_type: discountType, discount_value: discountType === 'none' ? '0' : discountValue, discount_reason: values.discount_reason || '',
       lines: lines.map((line) => ({ service_id: line.service_id, quantity: Number(line.quantity), expected_price: available.find((s) => s.id === line.service_id)?.price })) });
   }}><fieldset disabled={busy}>
     <h3>New order</h3>
     <div className="workspace-order-columns">
       <label className="workspace-field"><span>Customer full name</span><input name="customer_name" required minLength={2} maxLength={120} autoComplete="off" /></label>
-      <label className="workspace-field"><span>Customer phone or email</span><input name="customer_contact" required minLength={3} maxLength={254} autoComplete="off" /><small>Saved with this order. No message will be sent.</small></label>
+      <label className="workspace-field"><span>Other customer contact (optional)</span><input name="customer_contact" minLength={3} maxLength={254} autoComplete="off" /><small>Use a separate email or WhatsApp field below for delivery. Saving sends no message.</small></label>
     </div>
+    <div className="workspace-order-columns"><label className="workspace-field"><span>Primary customer email (optional)</span><input type="email" name="customer_email" maxLength={254}/></label><label className="workspace-field"><span>Customer WhatsApp number (optional)</span><input name="customer_whatsapp" placeholder="+2348012345678" pattern="\+[1-9][0-9]{7,14}" maxLength={16}/><small>Include + and the country code.</small></label></div>
+    <details><summary>Additional customer emails (optional)</summary>{[1,2,3].map(n=><label className="workspace-field" key={n}><span>Additional email {n}</span><input type="email" name={`extra_email_${n}`} maxLength={254}/></label>)}</details>
+    <label className="workspace-field"><span>Preferred delivery channel</span><select name="preferred_channel" defaultValue="none"><option value="none">No preference recorded</option><option value="email">Email</option><option value="whatsapp">WhatsApp</option></select></label><label className="workspace-order-check"><input type="checkbox" name="whatsapp_consent"/>Customer agreed to WhatsApp invoices and payment follow-ups.</label><p>Enter at least one customer contact. Contact choices are saved with this order.</p>
     {lines.map((line, index) => <div className="workspace-order-line" key={index}>
       <label className="workspace-field"><span>Service {index + 1}</span><select required value={line.service_id} onChange={(event) => update(index, 'service_id', event.target.value)}>
         <option value="">Choose a service</option>{available.filter((service) => service.id === line.service_id || !lines.some((other) => other.service_id === service.id)).map((service) => <option key={service.id} value={service.id}>{service.name} · {currency(service.price)}</option>)}
@@ -118,6 +123,7 @@ export default function WorkspaceOrders({ businessId, role, locations, initialLo
     <div className="workspace-order-actions"><button className={view === 'orders' ? 'workspace-secondary' : 'workspace-text-button'} aria-pressed={view === 'orders'} disabled={busy || newOrder || !!editing || profileForm} onClick={() => setView('orders')}>Orders</button><button className={view === 'catalogue' ? 'workspace-secondary' : 'workspace-text-button'} aria-pressed={view === 'catalogue'} disabled={busy || newOrder || !!editing || profileForm} onClick={() => setView('catalogue')}>Service catalogue</button></div>
     {error && <p role="alert" className="workspace-error">{error} <button className="workspace-text-button" disabled={busy} onClick={() => { setLoading(true); setError(''); setVersion((v) => v + 1); }}>Refresh catalogue and orders</button></p>}
     {notice && <p role="status" className="workspace-notice">{notice}</p>}
+    <WorkspaceBalanceAlerts base={base} onOpen={id=>action(async()=>setDetail(await api(`${base}/orders/${id}`)),'')}/>
     {loading && <p role="status">Loading services and orders…</p>}
     {data && orders && <>
       {view === 'catalogue' ? <>
@@ -151,7 +157,7 @@ export default function WorkspaceOrders({ businessId, role, locations, initialLo
           <PricingBreakdown pricing={detail.pricing} />
           <p className="workspace-order-total">Total <strong>{currency(detail.total)}</strong></p>
           <p><strong>{detail.profile.invoice_name}</strong><br />{detail.profile.address}</p><p className="workspace-order-prewrap">{detail.profile.payment_instructions}</p>
-          <WorkspaceInvoice key={`${detail.id}-${detail.status}`} base={base} order={detail} canIssue={canOrder} parentBusy={busy} />
+          <WorkspaceInvoice key={`${detail.id}-${detail.status}`} base={base} order={detail} canIssue={canOrder} canSchedule={['owner','manager','finance'].includes(role)} parentBusy={busy} />
           {detail.status === 'cancelled' ? <p>Cancelled by {detail.cancelled_by_name} on {new Date(detail.cancelled_at * 1000).toLocaleString('en-GB', { timeZone: 'Africa/Lagos' })}: {detail.cancel_reason}</p> : canOrder && <form onSubmit={(event) => {
             event.preventDefault(); const reason = new FormData(event.currentTarget).get('reason');
             action(async () => { await api(`${base}/orders/${detail.id}/cancel`, 'POST', { reason }); setDetail(await api(`${base}/orders/${detail.id}`)); }, 'Order cancelled. The original items and prices remain on record.');
