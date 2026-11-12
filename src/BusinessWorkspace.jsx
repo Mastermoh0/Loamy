@@ -203,6 +203,7 @@ export default function BusinessWorkspace() {
               </select></label></div>
             <div className="workspace-scope"><FontAwesomeIcon icon={faBuilding} /><div><strong>{ROLE_NAMES[workspace.role]} access</strong><p>{ROLE_NOTES[workspace.role]}</p></div><span>{workspace.locations.length} {workspace.locations.length === 1 ? 'location' : 'locations'}</span></div>
             {linkedLocation && <section className="workspace-location-arrival" aria-label="Location from QR link">{locationFromLink ? <><h2>{locationFromLink.name}</h2><p>{locationFromLink.address}</p><p>Opened from a location link. Your existing permissions still apply.</p>{canOrders ? <button className="workspace-primary" onClick={() => { setFinanceLocation(locationFromLink.id); setTab('orders'); }}>Open this location’s services & orders</button> : <button className="workspace-primary" onClick={() => setTab('expenses')}>Open expenses & receipts</button>}</> : <p role="alert">This location link is unavailable to the selected account or business. Sign in with an invited account, choose its business, or ask the owner for access.</p>}</section>}
+            <div className="workspace-layout">
             <div className="workspace-navigation" onKeyDown={(event) => {
               if (event.key === 'Escape' && menuOpen) {
                 setMenuOpen(false); menuButton.current?.focus();
@@ -212,7 +213,7 @@ export default function BusinessWorkspace() {
             <nav id="workspace-sections" className={`workspace-tabs${menuOpen ? ' workspace-tabs-open' : ''}`} aria-label="Workspace sections" onClick={(event) => {
               if (event.target.closest('button')) {
                 setMenuOpen(false);
-                if (window.matchMedia('(max-width: 760px)').matches) menuButton.current?.focus();
+                if (window.matchMedia('(max-width: 1099px)').matches) menuButton.current?.focus();
               }
             }}>
               {owner && <button aria-current={tab === 'overview' ? 'page' : undefined} onClick={() => setTab('overview')}>Owner overview</button>}
@@ -227,6 +228,7 @@ export default function BusinessWorkspace() {
               {owner && <button aria-current={tab === 'team' ? 'page' : undefined} onClick={() => setTab('team')}><FontAwesomeIcon icon={faUsers} />Team & access</button>}
             </nav>
             </div>
+            <div className="workspace-main-panel">
             {tab === 'reports' && canFinance ? <WorkspaceReports key={selected} businessId={selected} locations={workspace.locations} owner={owner} /> : tab === 'notifications' && canFinance ? <WorkspaceNotifications key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'suppliers' && canFinance ? <WorkspaceSuppliers key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'overview' && owner ? <WorkspaceOwner key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'expenses' ? <WorkspaceExpenses key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'payments' && canFinance ? <WorkspacePayments key={selected} businessId={selected} locations={workspace.locations} /> : tab === 'orders' && canOrders ? <WorkspaceOrders key={`${selected}-${financeLocation}`} businessId={selected} role={workspace.role} locations={workspace.locations} initialLocation={workspace.locations.some((l) => l.id === financeLocation) ? financeLocation : ''} /> : tab === 'finances' && canFinance ? <WorkspaceFinances key={`${selected}-${financeLocation}`} businessId={selected} role={workspace.role} locations={workspace.locations} initialLocation={financeLocation}
               onChanged={() => refresh(selected).catch((failure) => setError(failure.message))} /> : tab === 'locations' || !owner ? <section aria-labelledby="locations-title">
               <div className="workspace-section-heading"><div><h2 id="locations-title">{owner ? 'Business locations' : 'Your location'}</h2><p>{owner ? 'Each location will keep its own orders and financial activity.' : 'Your access is limited to this location.'}</p></div>
@@ -262,6 +264,8 @@ export default function BusinessWorkspace() {
               </fieldset></form></div>
               <section className="workspace-audit"><h3>Access history</h3><ul>{workspace.events.map((item, i) => <li key={`${item.created_at}-${i}`}><div>{item.action}<small>{item.actor}</small></div><time dateTime={new Date(item.created_at * 1000).toISOString()}>{new Date(item.created_at * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</time></li>)}</ul></section>
             </section>}
+            </div>
+            </div>
           </>}
         </>}
       </>}
