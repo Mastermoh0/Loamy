@@ -474,6 +474,12 @@ After backup/review, apply **`scripts/sql/enterprise/005_pricing.sql` after 004*
 
 ## 17. Customer workflows and owner evidence — 12 November 2026
 
+### Separate browser acceptance pass — 12 November 2026
+
+`docs/BROWSER-QA-2026-11-12.md` records a fresh UI-only pass against app commit `01d606d`: **13 Pass, 1 Fail, 2 Blocked and 4 Not run** across T59–T78. These are Codex browser observations, separate from the user's unchanged manual results and earlier automated tests. The run used fictional records and actual UI uploads/downloads; no direct API/database setup, live provider or production access. PDF totals reconciled with the browser-downloaded ZIP. The PDF/ZIP was captured before the T65 payment allocation, so saved balances reflect that earlier instant.
+
+**Open issue T69:** a cancelled invoice still displays a nonzero Remaining/Outstanding amount in owner detail, invoice detail and Payments & balances. The PDF correctly says do not pay; reminder stop checks and aggregate debtor/report exclusion passed. Correct this display/semantics consistently before release, preserving original amounts/history. It is recorded, not fixed, in this testing-only pass. Role/location boundary cases, exact isolated runway fixture, next-day reminder and posted receipt-backed drill-through remain incompletely tested manually; see the report for precise statuses and prerequisites.
+
 ### Implemented scope and deliberate boundaries
 
 - New orders save separate primary email, up to three alternative emails, international WhatsApp number, preferred channel and an explicit permission record. Email alternatives are individual destinations, never silent CCs. Legacy contacts/retries and issued invoice snapshots remain compatible. Contacts remain immutable; WhatsApp permission can be withdrawn. New channel controls sit beside the existing email workflow.
