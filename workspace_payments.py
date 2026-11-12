@@ -49,7 +49,9 @@ class InvoiceAccountInput(Input):
 def payment_totals(total, paid, invoice_status):
     total, paid = int(total), int(paid)
     status = 'cancelled' if invoice_status == 'cancelled' else 'overpaid' if paid > total else 'paid' if paid == total else 'part_paid' if paid else 'unpaid'
-    return {'status': status, 'total': money(total), 'allocated': money(paid), 'outstanding': money(max(total - paid, 0)), 'overpayment': money(max(paid - total, 0))}
+    # Cancellation ends collection; retain original amounts and allocation history.
+    outstanding = 0 if invoice_status == 'cancelled' else max(total - paid, 0)
+    return {'status': status, 'total': money(total), 'allocated': money(paid), 'outstanding': money(outstanding), 'overpayment': money(max(paid - total, 0))}
 
 
 def payment_summary(conn, invoice):

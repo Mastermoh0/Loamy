@@ -18,6 +18,20 @@ from workspace_whatsapp import WhatsAppSettings
 
 
 class CustomerWorkflowTests(PaymentTests):
+    def test_cancelled_balance_is_zero_across_invoice_payments_and_owner_detail(self):
+        self.create_contacts_invoice()
+        before=self.owner.get(self.endpoint).json()['invoice']
+        response=self.owner.post(self.base+f'/orders/{self.oid}/cancel',json={'reason':'Cancelled balance regression'})
+        self.assertEqual(response.status_code,200,response.text)
+        invoice=self.owner.get(self.endpoint).json()['invoice']
+        self.assertEqual(invoice['snapshot'],before['snapshot'])
+        self.assertEqual(invoice['payments']['outstanding'],'0.00')
+        self.assertEqual(invoice['payments']['total'],before['payments']['total'])
+        listed=next(r for r in self.owner.get(self.base+'/payments').json()['invoices'] if r['id']==self.iid)
+        self.assertEqual((listed['status'],listed['outstanding']),('cancelled','0.00'))
+        detail=self.owner.get(f'/enterprise-api/businesses/{self.bid}/owner-detail',params={'kind':'orders'}).json()['rows'][0]
+        self.assertEqual(detail['payments']['outstanding'],'0.00')
+
     def contacts_payload(self,key='new-contacts-order-0001'):
         return {**self.payload(key),'customer_email':'guest@example.test','additional_emails':['other@example.test'],
                 'customer_whatsapp':'+2348012345678','preferred_channel':'whatsapp','whatsapp_consent':True}

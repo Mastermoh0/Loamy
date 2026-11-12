@@ -47,3 +47,10 @@ Create an unpaid invoice, cancel its order, then open Owner overview → View lo
 - Per-location PDFs separated records correctly. Empty September date entry could not be reliably committed in this browser control. The attempted download retained default dates and is named T72-date-entry-attempt-default-period.pdf; it does not prove an empty-period pass or a product defect. Manager had no Owner overview/review-PDF/chat controls, but T72 remains Blocked because the empty-period part is incomplete.
 - Original review PDF/ZIP and per-location PDFs predate later payment/receipt mutations. Their saved balances describe those earlier instants, not the final fixture state.
 - Evidence stays local under outputs/loamy-browser-qa-20261112 in the parent workspace. Screenshots, downloads, fictional email fixtures, invitation tokens, credentials and private spreadsheet URL are not committed.
+
+
+## T69 fix and browser retest — 12 November 2026
+
+T69 is now Pass on retest; current manual outcome is **18 Pass, 0 Fail, 2 Blocked**. Earlier failures above remain historical observations. Root cause: payment_totals marked cancellation but still returned total minus allocated as outstanding. It now returns zero collectible outstanding for cancelled invoices, preserving total, allocations, overpayment and immutable snapshots. Owner detail explicitly says Cancelled — nothing to pay. No migration or ledger rewrite.
+
+Added an endpoint regression covering cancelled invoice detail, payment list and owner detail, with snapshot/original-total preservation. **40 tests passed** in 48.108 seconds across customer workflows, payments, invoices, owner, reports, notifications and pricing. Scoped JSX lint and business build passed. Browser retest confirmed zero outstanding in Payments & balances and invoice detail, original NGN 1,075.11 total/history retained, and explicit cancellation wording in Owner overview. Local screenshot: T69-fixed-owner.png in the existing QA evidence directory. Real production remains untested. T64 and the empty-period portion of T72 remain Blocked.
