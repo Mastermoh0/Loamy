@@ -1,4 +1,8 @@
-# React + Vite
+# Loamy: local review of Mohammed's branch
+
+Samuel: start with [SAMUEL-LOCAL-SETUP-AND-TESTING.md](SAMUEL-LOCAL-SETUP-AND-TESTING.md) to install, run and test the business workspace on your computer without production credentials. For integration and release requirements, see [SAMUEL-PRODUCTION-HANDOFF.md](SAMUEL-PRODUCTION-HANDOFF.md).
+
+## Original frontend template notes
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 

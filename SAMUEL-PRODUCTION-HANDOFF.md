@@ -2,7 +2,7 @@
 
 > **Living handoff for Samuel, his team and his AI agents.** Update this file after each meaningful feature or integration change. It is an implementation map and release checklist, not evidence that a live deployment has happened.
 
-Last updated: **9 November 2026, Africa/Lagos**.
+Last updated: **13 November 2026, Africa/Lagos**.
 
 | Item | Current position |
 |---|---|
@@ -541,3 +541,9 @@ BusinessWorkspace adds a layout wrapper/main panel while retaining the exact exi
 Actual validation: JSX lint and business-only build passed. The detector ran once and returned no findings. Browser checked 1440px desktop, 1100px rail boundary, 1024px and 768px tablets, and a 390px phone regression. Measured page/scroll widths matched at 1440/1100/1024/768/390 during their checks. Desktop rail/four metric placement and final header alignment were visually reviewed. Tablet disclosure opened in two columns, selection closed it, Escape restored button focus, and New order retained two-column fields; the empty draft was discarded without saving. Phone disclosure selection still worked. Viewport overrides were reset. Local evidence: desktop-refined.png and tablet-refined.png in the existing QA directory. No real-device, Safari, physical-touch or screen-reader test; role controls were preserved by source rather than rerunning all role logins for this layout-only change.
 
 Acceptance: check desktop rail scrolling/current section and action alignment; compare tablet portrait/landscape menu and date filters; open/discard long forms; confirm role-specific destinations remain the same; check phone behavior when resizing across 760/1099/1100px. Existing financial checklist outcomes are untouched.
+
+## Samuel's local setup and acceptance guide — 13 November 2026
+
+Added `SAMUEL-LOCAL-SETUP-AND-TESTING.md`, linked from README, for a fresh checkout of the development fork's `mohammeds-branch`. It covers Windows and macOS/Linux dependency commands, the guarded SQLite/captured-mail preview, separate fictional account verification/team invitations, ordered acceptance scenarios, optional offline OCR and backend/build checks, persistence/updates and troubleshooting. It provides Samuel-specific result columns so the user's and Codex's existing manual results remain unchanged. No private spreadsheet URL, credentials, database or local test evidence is included.
+
+Documentation-only change: verified commands/paths/test-module names and UI labels against current implementation, checked local document references and Git whitespace. No new machine installation, runtime suite, provider delivery, staging or production validation was performed. Prior results remain historical; next-day reminder and empty-period PDF acceptance still need their actual checks. No application behavior, schema, deployment configuration or release gate changed.
